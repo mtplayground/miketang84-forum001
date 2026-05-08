@@ -86,7 +86,10 @@ async fn main() -> AppResult<()> {
                 .post(threads::post_create_thread)
                 .route_layer(require_auth_layer_for_thread_create),
         )
-        .route("/t/{thread_ref}", get(threads::show_thread))
+        .route(
+            "/t/{thread_ref}",
+            get(threads::show_thread).post(threads::post_reply_to_thread),
+        )
         .route(
             "/c/{category_slug}/t/{thread_slug}",
             get(threads::show_thread_legacy),
