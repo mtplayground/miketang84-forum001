@@ -7,14 +7,86 @@
     <a class="text-sm font-semibold uppercase tracking-[0.24em] text-ember-600 underline decoration-ember-300 underline-offset-4" href="/c/{{ category_slug }}">
       Back to {{ category_name }}
     </a>
-    <h1 class="mt-4 text-4xl leading-none text-ink-900 sm:text-5xl">{{ title }}</h1>
 
-    <article class="prose prose-stone mt-10 max-w-none">
-      {{ opening_post_html|safe }}
-    </article>
-
-    <div class="mt-10 rounded-3xl border border-dashed border-stone-300 bg-stone-50/80 px-6 py-10 text-center text-stone-600">
-      Full thread replies and pagination land in the next forum task.
+    <div class="mt-4 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-[0.24em] text-stone-500">{{ category_name }}</p>
+        <h1 class="mt-3 text-4xl leading-none text-ink-900 sm:text-5xl">{{ title }}</h1>
+      </div>
+      <p class="text-sm text-stone-500">
+        {{ reply_count }} replies
+      </p>
     </div>
+
+    <section class="mt-10 space-y-6">
+      <article class="rounded-3xl border border-stone-200 bg-stone-50/80 px-6 py-6">
+        <div class="flex flex-col gap-3 border-b border-stone-200 pb-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p class="text-sm font-semibold text-ink-900">{{ opening_post.author_username }}</p>
+            <p class="text-sm text-stone-500">{{ opening_post.created_at }}</p>
+          </div>
+          {% if let Some(edited_at) = opening_post.edited_at %}
+            <p class="text-xs font-semibold uppercase tracking-[0.18em] text-stone-500">{{ edited_at }}</p>
+          {% endif %}
+        </div>
+        <div class="prose prose-stone mt-6 max-w-none">
+          {{ opening_post.body_html|safe }}
+        </div>
+      </article>
+
+      <section>
+        <div class="flex items-center justify-between gap-4">
+          <h2 class="text-2xl font-semibold text-ink-900">Replies</h2>
+          <p class="text-sm text-stone-500">
+            Page {{ pagination.current_page }} of {{ pagination.total_pages }}
+          </p>
+        </div>
+
+        {% if replies.is_empty() %}
+          <div class="mt-6 rounded-3xl border border-dashed border-stone-300 bg-stone-50/80 px-6 py-10 text-center text-stone-600">
+            No replies yet.
+          </div>
+        {% else %}
+          <div class="mt-6 space-y-4">
+            {% for reply in replies %}
+              <article class="rounded-3xl border border-stone-200 bg-white px-6 py-6 shadow-sm">
+                <div class="flex flex-col gap-3 border-b border-stone-200 pb-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p class="text-sm font-semibold text-ink-900">{{ reply.author_username }}</p>
+                    <p class="text-sm text-stone-500">{{ reply.created_at }}</p>
+                  </div>
+                  {% if let Some(edited_at) = reply.edited_at %}
+                    <p class="text-xs font-semibold uppercase tracking-[0.18em] text-stone-500">{{ edited_at }}</p>
+                  {% endif %}
+                </div>
+                <div class="prose prose-stone mt-6 max-w-none">
+                  {{ reply.body_html|safe }}
+                </div>
+              </article>
+            {% endfor %}
+          </div>
+        {% endif %}
+
+        <div class="mt-8 flex items-center justify-between gap-4">
+          <div>
+            {% if let Some(previous_page) = pagination.previous_page %}
+              <a class="inline-flex items-center justify-center rounded-full border border-stone-300 px-5 py-2 text-sm font-semibold text-stone-700 transition hover:border-stone-400 hover:bg-stone-50" href="{{ canonical_path }}?page={{ previous_page }}">
+                Previous
+              </a>
+            {% endif %}
+          </div>
+          <div class="text-sm text-stone-500">
+            {{ pagination.total_items }} total replies
+          </div>
+          <div>
+            {% if let Some(next_page) = pagination.next_page %}
+              <a class="inline-flex items-center justify-center rounded-full border border-stone-300 px-5 py-2 text-sm font-semibold text-stone-700 transition hover:border-stone-400 hover:bg-stone-50" href="{{ canonical_path }}?page={{ next_page }}">
+                Next
+              </a>
+            {% endif %}
+          </div>
+        </div>
+      </section>
+    </section>
   </section>
 {% endblock %}

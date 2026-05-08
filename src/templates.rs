@@ -94,6 +94,7 @@ impl CategoryDetailTemplate {
 }
 
 pub struct CategoryThreadListItem {
+    pub id: i64,
     pub title: String,
     pub slug: String,
     pub is_pinned: bool,
@@ -103,6 +104,7 @@ pub struct CategoryThreadListItem {
 impl CategoryThreadListItem {
     pub fn from_thread(thread: Thread) -> Self {
         Self {
+            id: thread.id,
             title: thread.title,
             slug: thread.slug,
             is_pinned: thread.is_pinned,
@@ -162,30 +164,68 @@ impl CreateThreadTemplate {
 
 #[derive(Template)]
 #[template(path = "thread_detail.html")]
-pub struct ThreadPageTemplate {
+pub struct ThreadDetailTemplate {
     pub page_title: String,
+    pub canonical_path: String,
     pub category_slug: String,
     pub category_name: String,
     pub title: String,
-    pub opening_post_html: String,
+    pub opening_post: ThreadPostItem,
+    pub replies: Vec<ThreadPostItem>,
+    pub reply_count: i64,
+    pub pagination: Pagination,
     pub is_authenticated: bool,
 }
 
-impl ThreadPageTemplate {
+impl ThreadDetailTemplate {
     pub fn new(
+        thread_id: i64,
+        thread_slug: String,
         category_slug: String,
         category_name: String,
         title: String,
-        opening_post_html: String,
+        opening_post: ThreadPostItem,
+        replies: Vec<ThreadPostItem>,
+        reply_count: i64,
+        pagination: Pagination,
         is_authenticated: bool,
     ) -> Self {
         Self {
             page_title: title.clone(),
+            canonical_path: format!("/t/{thread_id}-{thread_slug}"),
             category_slug,
             category_name,
             title,
-            opening_post_html,
+            opening_post,
+            replies,
+            reply_count,
+            pagination,
             is_authenticated,
+        }
+    }
+}
+
+pub struct ThreadPostItem {
+    pub author_username: String,
+    pub created_at: String,
+    pub edited_at: Option<String>,
+    pub body_html: String,
+}
+
+impl ThreadPostItem {
+    pub fn new(
+        author_username: String,
+        created_at: chrono::DateTime<chrono::Utc>,
+        edited_at: Option<chrono::DateTime<chrono::Utc>>,
+        body_html: String,
+    ) -> Self {
+        Self {
+            author_username,
+            created_at: created_at.format("%B %-d, %Y at %-I:%M %p UTC").to_string(),
+            edited_at: edited_at.map(|timestamp| {
+                format!("Edited {}", timestamp.format("%B %-d, %Y at %-I:%M %p UTC"))
+            }),
+            body_html,
         }
     }
 }
