@@ -14,6 +14,18 @@ use crate::{
     templates::{CategoryDetailTemplate, CategoryIndexItem, CategoryIndexTemplate},
 };
 
+#[derive(sqlx::FromRow)]
+pub(crate) struct CategoryWithCountsRow {
+    pub(crate) id: i64,
+    pub(crate) slug: String,
+    pub(crate) name: String,
+    pub(crate) description: String,
+    pub(crate) position: i32,
+    pub(crate) created_at: chrono::DateTime<chrono::Utc>,
+    pub(crate) thread_count: i64,
+    pub(crate) post_count: i64,
+}
+
 #[derive(Clone)]
 #[allow(dead_code)]
 pub struct CategoryRepository {
@@ -50,6 +62,76 @@ impl CategoryRepository {
         .fetch_optional(&self.db_pool)
         .await
     }
+
+    pub async fn list_all_with_counts(&self) -> Result<Vec<CategoryWithCountsRow>, sqlx::Error> {
+        query_as::<_, CategoryWithCountsRow>(
+            r#"
+            SELECT
+                c.id,
+                c.slug,
+                c.name,
+                c.description,
+                c.position,
+                c.created_at,
+                COALESCE(thread_counts.thread_count, 0) AS thread_count,
+                COALESCE(post_counts.post_count, 0) AS post_count
+            FROM categories c
+            LEFT JOIN (
+                SELECT category_id, COUNT(*)::bigint AS thread_count
+                FROM threads
+                WHERE is_deleted = FALSE
+                GROUP BY category_id
+            ) AS thread_counts ON thread_counts.category_id = c.id
+            LEFT JOIN (
+                SELECT t.category_id, COUNT(*)::bigint AS post_count
+                FROM threads t
+                JOIN posts p ON p.thread_id = t.id
+                WHERE t.is_deleted = FALSE AND p.is_deleted = FALSE
+                GROUP BY t.category_id
+            ) AS post_counts ON post_counts.category_id = c.id
+            ORDER BY c.position ASC, c.id ASC
+            "#,
+        )
+        .fetch_all(&self.db_pool)
+        .await
+    }
+
+    pub async fn find_by_slug_with_counts(
+        &self,
+        slug: &str,
+    ) -> Result<Option<CategoryWithCountsRow>, sqlx::Error> {
+        query_as::<_, CategoryWithCountsRow>(
+            r#"
+            SELECT
+                c.id,
+                c.slug,
+                c.name,
+                c.description,
+                c.position,
+                c.created_at,
+                COALESCE(thread_counts.thread_count, 0) AS thread_count,
+                COALESCE(post_counts.post_count, 0) AS post_count
+            FROM categories c
+            LEFT JOIN (
+                SELECT category_id, COUNT(*)::bigint AS thread_count
+                FROM threads
+                WHERE is_deleted = FALSE
+                GROUP BY category_id
+            ) AS thread_counts ON thread_counts.category_id = c.id
+            LEFT JOIN (
+                SELECT t.category_id, COUNT(*)::bigint AS post_count
+                FROM threads t
+                JOIN posts p ON p.thread_id = t.id
+                WHERE t.is_deleted = FALSE AND p.is_deleted = FALSE
+                GROUP BY t.category_id
+            ) AS post_counts ON post_counts.category_id = c.id
+            WHERE c.slug = $1
+            "#,
+        )
+        .bind(slug)
+        .fetch_optional(&self.db_pool)
+        .await
+    }
 }
 
 pub async fn list_categories(
@@ -58,7 +140,7 @@ pub async fn list_categories(
 ) -> Response {
     let repository = CategoryRepository::new(state.db_pool.clone());
 
-    let categories = match repository.list_all().await {
+    let categories = match repository.list_all_with_counts().await {
         Ok(categories) => categories,
         Err(db_error) => {
             error!(error = %db_error, "failed to list categories");
@@ -68,7 +150,7 @@ pub async fn list_categories(
 
     let category_items = categories
         .into_iter()
-        .map(|category| CategoryIndexItem::from_category(category, 0, 0))
+        .map(CategoryIndexItem::from_category_with_counts)
         .collect();
 
     render_html(
@@ -89,7 +171,7 @@ pub async fn show_category(
 ) -> Response {
     let repository = CategoryRepository::new(state.db_pool.clone());
 
-    let category = match repository.find_by_slug(&slug).await {
+    let category = match repository.find_by_slug_with_counts(&slug).await {
         Ok(Some(category)) => category,
         Ok(None) => return StatusCode::NOT_FOUND.into_response(),
         Err(db_error) => {
@@ -99,7 +181,7 @@ pub async fn show_category(
     };
 
     render_html(
-        CategoryDetailTemplate::from_category(category, current_user.is_authenticated(), 0, 0),
+        CategoryDetailTemplate::from_category_with_counts(category, current_user.is_authenticated()),
         StatusCode::OK,
         "failed to render category detail template",
     )

@@ -25,6 +25,23 @@ impl CategoryIndexItem {
             post_count,
         }
     }
+
+    pub fn from_category_with_counts(
+        category_with_counts: crate::categories::CategoryWithCountsRow,
+    ) -> Self {
+        Self::from_category(
+            Category {
+                id: category_with_counts.id,
+                slug: category_with_counts.slug,
+                name: category_with_counts.name,
+                description: category_with_counts.description,
+                position: category_with_counts.position,
+                created_at: category_with_counts.created_at,
+            },
+            category_with_counts.thread_count,
+            category_with_counts.post_count,
+        )
+    }
 }
 
 #[derive(Template)]
@@ -39,6 +56,7 @@ pub struct CategoryIndexTemplate {
 #[template(path = "category_detail.html")]
 pub struct CategoryDetailTemplate {
     pub page_title: String,
+    pub slug: String,
     pub name: String,
     pub description: String,
     pub thread_count: i64,
@@ -47,25 +65,100 @@ pub struct CategoryDetailTemplate {
 }
 
 impl CategoryDetailTemplate {
-    pub fn from_category(
-        category: Category,
+    pub fn from_category_with_counts(
+        category_with_counts: crate::categories::CategoryWithCountsRow,
         is_authenticated: bool,
-        thread_count: i64,
-        post_count: i64,
     ) -> Self {
-        let page_title = category.name.clone();
-        let description = if category.description.trim().is_empty() {
-            "No description yet.".to_owned()
-        } else {
-            category.description
-        };
+        Self {
+            page_title: category_with_counts.name.clone(),
+            slug: category_with_counts.slug,
+            name: category_with_counts.name,
+            description: if category_with_counts.description.trim().is_empty() {
+                "No description yet.".to_owned()
+            } else {
+                category_with_counts.description
+            },
+            thread_count: category_with_counts.thread_count,
+            post_count: category_with_counts.post_count,
+            is_authenticated,
+        }
+    }
+}
+
+#[derive(Default)]
+pub struct CreateThreadFormValues {
+    pub title: String,
+    pub body: String,
+}
+
+#[derive(Default)]
+pub struct CreateThreadErrors {
+    pub title: Option<String>,
+    pub body: Option<String>,
+}
+
+impl CreateThreadErrors {
+    pub fn is_empty(&self) -> bool {
+        self.title.is_none() && self.body.is_none()
+    }
+}
+
+#[derive(Template)]
+#[template(path = "create_thread.html")]
+pub struct CreateThreadTemplate {
+    pub page_title: String,
+    pub category_slug: String,
+    pub category_name: String,
+    pub form: CreateThreadFormValues,
+    pub errors: CreateThreadErrors,
+    pub is_authenticated: bool,
+}
+
+impl CreateThreadTemplate {
+    pub fn new(
+        category_slug: String,
+        category_name: String,
+        form: CreateThreadFormValues,
+        errors: CreateThreadErrors,
+    ) -> Self {
+        let page_title = format!("New Thread in {category_name}");
 
         Self {
             page_title,
-            name: category.name,
-            description,
-            thread_count,
-            post_count,
+            category_slug,
+            category_name,
+            form,
+            errors,
+            is_authenticated: true,
+        }
+    }
+}
+
+#[derive(Template)]
+#[template(path = "thread_detail.html")]
+pub struct ThreadPageTemplate {
+    pub page_title: String,
+    pub category_slug: String,
+    pub category_name: String,
+    pub title: String,
+    pub opening_post_html: String,
+    pub is_authenticated: bool,
+}
+
+impl ThreadPageTemplate {
+    pub fn new(
+        category_slug: String,
+        category_name: String,
+        title: String,
+        opening_post_html: String,
+        is_authenticated: bool,
+    ) -> Self {
+        Self {
+            page_title: title.clone(),
+            category_slug,
+            category_name,
+            title,
+            opening_post_html,
             is_authenticated,
         }
     }
