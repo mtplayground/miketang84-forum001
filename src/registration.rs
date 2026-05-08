@@ -10,6 +10,7 @@ use tower_sessions::Session;
 use tracing::error;
 
 use crate::{
+    auth::MaybeCurrentUser,
     models::User,
     password::hash_password,
     state::AppState,
@@ -23,20 +24,12 @@ pub struct RegistrationForm {
     pub confirm: String,
 }
 
-pub async fn get_registration(session: Session) -> Response {
-    let is_authenticated = match session.get::<i64>("user_id").await {
-        Ok(user_id) => user_id.is_some(),
-        Err(session_error) => {
-            error!(error = %session_error, "failed to read auth state for registration page");
-            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-        }
-    };
-
+pub async fn get_registration(current_user: MaybeCurrentUser) -> Response {
     render_registration_page(
         RegistrationTemplate::new(
             RegistrationFormValues::default(),
             RegistrationErrors::default(),
-            is_authenticated,
+            current_user.is_authenticated(),
         ),
         StatusCode::OK,
     )
@@ -44,6 +37,7 @@ pub async fn get_registration(session: Session) -> Response {
 
 pub async fn post_registration(
     State(state): State<AppState>,
+    current_user: MaybeCurrentUser,
     session: Session,
     Form(form): Form<RegistrationForm>,
 ) -> Response {
@@ -51,13 +45,7 @@ pub async fn post_registration(
     let form_values = RegistrationFormValues {
         username: username.clone(),
     };
-    let is_authenticated = match session.get::<i64>("user_id").await {
-        Ok(user_id) => user_id.is_some(),
-        Err(session_error) => {
-            error!(error = %session_error, "failed to read auth state during registration");
-            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-        }
-    };
+    let is_authenticated = current_user.is_authenticated();
 
     let mut errors = validate_registration_form(&form, &username);
 

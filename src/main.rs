@@ -2,13 +2,13 @@ use askama::Template;
 use axum::{
     extract::State,
     http::StatusCode,
+    middleware,
     response::Html,
     routing::{get, post},
     Router,
 };
 use sqlx::query_scalar;
 use tokio::net::TcpListener;
-use tower_sessions::Session;
 use tower::ServiceBuilder;
 use tower_http::services::ServeDir;
 use tower_sessions::{cookie::SameSite, SessionManagerLayer};
@@ -16,6 +16,7 @@ use tower_sessions_sqlx_store::PostgresStore;
 use tracing::{error, info};
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
+mod auth;
 mod config;
 mod login;
 mod models;
@@ -44,12 +45,19 @@ async fn main() -> AppResult<()> {
         .with_same_site(SameSite::Lax)
         .with_secure(!cfg!(debug_assertions))
         .with_private(session_encryption_key(&config.session_secret)?);
+    let require_auth_layer = middleware::from_fn_with_state(app_state.clone(), auth::require_auth);
 
     let app = Router::new()
         .route("/", get(root))
         .route("/login", get(login::get_login).post(login::post_login))
-        .route("/logout", post(login::post_logout))
-        .route("/register", get(registration::get_registration).post(registration::post_registration))
+        .route(
+            "/logout",
+            post(login::post_logout).route_layer(require_auth_layer),
+        )
+        .route(
+            "/register",
+            get(registration::get_registration).post(registration::post_registration),
+        )
         .route("/healthz", get(healthz))
         .nest_service("/static", ServeDir::new("static"))
         .with_state(app_state)
@@ -86,21 +94,12 @@ fn init_tracing(rust_log: &str) -> AppResult<()> {
     Ok(())
 }
 
-async fn root(session: Session) -> Result<Html<String>, StatusCode> {
-    let is_authenticated = session
-        .get::<i64>("user_id")
-        .await
-        .map_err(|session_error| {
-            error!(error = %session_error, "failed to read auth state for home page");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?
-        .is_some();
-
+async fn root(current_user: auth::MaybeCurrentUser) -> Result<Html<String>, StatusCode> {
     HomeTemplate {
         page_title: "Home",
         heading: "Forum foundation is online.",
         intro: "This starter page is rendered with Askama and inherits the shared base layout that future forum pages will extend.",
-        is_authenticated,
+        is_authenticated: current_user.is_authenticated(),
     }
     .render()
     .map(Html)

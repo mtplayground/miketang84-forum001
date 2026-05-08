@@ -10,6 +10,7 @@ use tower_sessions::Session;
 use tracing::error;
 
 use crate::{
+    auth::{CurrentUser, MaybeCurrentUser},
     models::User,
     password::verify_password,
     state::AppState,
@@ -22,23 +23,20 @@ pub struct LoginForm {
     pub password: String,
 }
 
-pub async fn get_login(session: Session) -> Response {
-    let is_authenticated = match session.get::<i64>("user_id").await {
-        Ok(user_id) => user_id.is_some(),
-        Err(session_error) => {
-            error!(error = %session_error, "failed to read auth state for login page");
-            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-        }
-    };
-
+pub async fn get_login(current_user: MaybeCurrentUser) -> Response {
     render_login_page(
-        LoginTemplate::new(LoginFormValues::default(), LoginErrors::default(), is_authenticated),
+        LoginTemplate::new(
+            LoginFormValues::default(),
+            LoginErrors::default(),
+            current_user.is_authenticated(),
+        ),
         StatusCode::OK,
     )
 }
 
 pub async fn post_login(
     State(state): State<AppState>,
+    current_user: MaybeCurrentUser,
     session: Session,
     Form(form): Form<LoginForm>,
 ) -> Response {
@@ -46,13 +44,7 @@ pub async fn post_login(
     let form_values = LoginFormValues {
         username: username.clone(),
     };
-    let is_authenticated = match session.get::<i64>("user_id").await {
-        Ok(user_id) => user_id.is_some(),
-        Err(session_error) => {
-            error!(error = %session_error, "failed to read auth state during login");
-            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-        }
-    };
+    let is_authenticated = current_user.is_authenticated();
 
     let mut errors = LoginErrors::default();
 
@@ -127,7 +119,7 @@ pub async fn post_login(
     Redirect::to("/").into_response()
 }
 
-pub async fn post_logout(session: Session) -> Response {
+pub async fn post_logout(_current_user: CurrentUser, session: Session) -> Response {
     if let Err(session_error) = session.flush().await {
         error!(error = %session_error, "failed to flush session during logout");
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
@@ -136,7 +128,10 @@ pub async fn post_logout(session: Session) -> Response {
     Redirect::to("/").into_response()
 }
 
-async fn find_user_by_username(state: &AppState, username: &str) -> Result<Option<User>, sqlx::Error> {
+async fn find_user_by_username(
+    state: &AppState,
+    username: &str,
+) -> Result<Option<User>, sqlx::Error> {
     query_as::<_, User>(
         r#"
         SELECT id, username, password_hash, role, bio, created_at, updated_at
