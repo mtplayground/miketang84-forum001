@@ -1,10 +1,10 @@
-use chrono::{DateTime, Utc};
 use askama::Template;
 use axum::{
-    extract::{Form, Path, State},
+    extract::{Form, Path, Query, State},
     http::StatusCode,
     response::{Html, IntoResponse, Redirect, Response},
 };
+use chrono::{DateTime, Utc};
 use sqlx::{query, query_as, query_scalar, PgPool};
 use tracing::error;
 
@@ -13,8 +13,12 @@ use crate::{
     categories::CategoryRepository,
     markdown::render_markdown,
     models::Thread,
+    pagination::{Pagination, PaginationQuery, DEFAULT_PAGE_SIZE},
     state::AppState,
-    templates::{CreateThreadErrors, CreateThreadFormValues, CreateThreadTemplate, ThreadPageTemplate},
+    templates::{
+        CreateThreadErrors, CreateThreadFormValues, CreateThreadTemplate, ThreadDetailTemplate,
+        ThreadPostItem,
+    },
 };
 
 const THREAD_TITLE_MIN_LENGTH: usize = 3;
@@ -42,11 +46,20 @@ pub struct CreateThreadForm {
 }
 
 #[derive(sqlx::FromRow)]
-struct ThreadPageRow {
+struct ThreadDetailRow {
+    id: i64,
+    slug: String,
+    title: String,
     category_slug: String,
     category_name: String,
-    title: String,
-    opening_post_html: String,
+}
+
+#[derive(sqlx::FromRow)]
+struct ThreadPostRow {
+    username: String,
+    body_html: String,
+    created_at: DateTime<Utc>,
+    edited_at: Option<DateTime<Utc>>,
 }
 
 #[allow(dead_code)]
@@ -132,30 +145,6 @@ impl ThreadRepository {
         .await
     }
 
-    pub async fn list_by_category(&self, category_id: i64) -> Result<Vec<Thread>, sqlx::Error> {
-        query_as::<_, Thread>(
-            r#"
-            SELECT
-                id,
-                category_id,
-                user_id,
-                title,
-                slug,
-                is_pinned,
-                is_locked,
-                is_deleted,
-                created_at,
-                last_activity_at
-            FROM threads
-            WHERE category_id = $1
-            ORDER BY is_pinned DESC, last_activity_at DESC, id DESC
-            "#,
-        )
-        .bind(category_id)
-        .fetch_all(&self.db_pool)
-        .await
-    }
-
     pub async fn count_by_category(&self, category_id: i64) -> Result<i64, sqlx::Error> {
         query_scalar::<_, i64>(
             r#"
@@ -218,6 +207,86 @@ impl ThreadRepository {
         .execute(&self.db_pool)
         .await
         .map(|_| ())
+    }
+
+    async fn find_detail_by_id(&self, id: i64) -> Result<Option<ThreadDetailRow>, sqlx::Error> {
+        query_as::<_, ThreadDetailRow>(
+            r#"
+            SELECT
+                t.id,
+                t.slug,
+                t.title,
+                c.slug AS category_slug,
+                c.name AS category_name
+            FROM threads t
+            JOIN categories c ON c.id = t.category_id
+            WHERE t.id = $1 AND t.is_deleted = FALSE
+            "#,
+        )
+        .bind(id)
+        .fetch_optional(&self.db_pool)
+        .await
+    }
+
+    async fn find_opening_post(&self, thread_id: i64) -> Result<Option<ThreadPostRow>, sqlx::Error> {
+        query_as::<_, ThreadPostRow>(
+            r#"
+            SELECT
+                u.username,
+                p.body_html,
+                p.created_at,
+                p.edited_at
+            FROM posts p
+            JOIN users u ON u.id = p.user_id
+            WHERE p.thread_id = $1 AND p.is_deleted = FALSE
+            ORDER BY p.created_at ASC, p.id ASC
+            LIMIT 1
+            "#,
+        )
+        .bind(thread_id)
+        .fetch_optional(&self.db_pool)
+        .await
+    }
+
+    async fn count_replies(&self, thread_id: i64) -> Result<i64, sqlx::Error> {
+        query_scalar::<_, i64>(
+            r#"
+            SELECT GREATEST(COUNT(*)::bigint - 1, 0)
+            FROM posts
+            WHERE thread_id = $1 AND is_deleted = FALSE
+            "#,
+        )
+        .bind(thread_id)
+        .fetch_one(&self.db_pool)
+        .await
+    }
+
+    async fn list_replies_page(
+        &self,
+        thread_id: i64,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<ThreadPostRow>, sqlx::Error> {
+        query_as::<_, ThreadPostRow>(
+            r#"
+            SELECT
+                u.username,
+                p.body_html,
+                p.created_at,
+                p.edited_at
+            FROM posts p
+            JOIN users u ON u.id = p.user_id
+            WHERE p.thread_id = $1 AND p.is_deleted = FALSE
+            ORDER BY p.created_at ASC, p.id ASC
+            OFFSET $2 + 1
+            LIMIT $3
+            "#,
+        )
+        .bind(thread_id)
+        .bind(offset)
+        .bind(limit)
+        .fetch_all(&self.db_pool)
+        .await
     }
 }
 
@@ -354,68 +423,119 @@ pub async fn post_create_thread(
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     }
 
-    Redirect::to(&format!("/c/{}/t/{}", category.slug, thread.slug)).into_response()
+    Redirect::to(&format!("/t/{}-{}", thread.id, thread.slug)).into_response()
 }
 
 pub async fn show_thread(
     State(state): State<AppState>,
     current_user: MaybeCurrentUser,
+    Path(thread_ref): Path<String>,
+    Query(pagination_query): Query<PaginationQuery>,
+) -> Response {
+    let (thread_id, requested_slug) = match parse_thread_ref(&thread_ref) {
+        Some(parts) => parts,
+        None => return StatusCode::NOT_FOUND.into_response(),
+    };
+
+    let repository = ThreadRepository::new(state.db_pool.clone());
+
+    let thread = match repository.find_detail_by_id(thread_id).await {
+        Ok(Some(thread)) => thread,
+        Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+        Err(db_error) => {
+            error!(error = %db_error, thread_id, "failed to load thread detail");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    if thread.slug != requested_slug {
+        return Redirect::to(&format!("/t/{}-{}", thread.id, thread.slug)).into_response();
+    }
+
+    let opening_post = match repository.find_opening_post(thread.id).await {
+        Ok(Some(opening_post)) => opening_post,
+        Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+        Err(db_error) => {
+            error!(error = %db_error, thread_id = thread.id, "failed to load opening post");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    let reply_count = match repository.count_replies(thread.id).await {
+        Ok(reply_count) => reply_count,
+        Err(db_error) => {
+            error!(error = %db_error, thread_id = thread.id, "failed to count thread replies");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    let pagination = Pagination::new(
+        pagination_query.requested_page(),
+        DEFAULT_PAGE_SIZE,
+        reply_count,
+    );
+
+    let replies = match repository
+        .list_replies_page(thread.id, pagination.per_page, pagination.offset())
+        .await
+    {
+        Ok(replies) => replies,
+        Err(db_error) => {
+            error!(error = %db_error, thread_id = thread.id, "failed to load thread replies");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    let template = ThreadDetailTemplate::new(
+        thread.id,
+        thread.slug,
+        thread.category_slug,
+        thread.category_name,
+        thread.title,
+        thread_post_item(opening_post),
+        replies.into_iter().map(thread_post_item).collect(),
+        reply_count,
+        pagination,
+        current_user.is_authenticated(),
+    );
+
+    render_thread_page(template, StatusCode::OK)
+}
+
+pub async fn show_thread_legacy(
+    State(state): State<AppState>,
     Path((category_slug, thread_slug)): Path<(String, String)>,
 ) -> Response {
-    let thread_page = match fetch_thread_page(&state.db_pool, &category_slug, &thread_slug).await {
-        Ok(Some(thread_page)) => thread_page,
+    let category_repository = CategoryRepository::new(state.db_pool.clone());
+    let thread_repository = ThreadRepository::new(state.db_pool.clone());
+
+    let category = match category_repository.find_by_slug(&category_slug).await {
+        Ok(Some(category)) => category,
         Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+        Err(db_error) => {
+            error!(error = %db_error, category_slug, "failed to load category for legacy thread URL");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    let thread = match thread_repository
+        .find_by_category_and_slug(category.id, &thread_slug)
+        .await
+    {
+        Ok(Some(thread)) if !thread.is_deleted => thread,
+        Ok(Some(_)) | Ok(None) => return StatusCode::NOT_FOUND.into_response(),
         Err(db_error) => {
             error!(
                 error = %db_error,
-                category_slug,
+                category_id = category.id,
                 thread_slug,
-                "failed to load thread page"
+                "failed to load legacy thread URL"
             );
             return StatusCode::INTERNAL_SERVER_ERROR.into_response();
         }
     };
 
-    render_thread_page(
-        ThreadPageTemplate::new(
-            thread_page.category_slug,
-            thread_page.category_name,
-            thread_page.title,
-            thread_page.opening_post_html,
-            current_user.is_authenticated(),
-        ),
-        StatusCode::OK,
-    )
-}
-
-async fn fetch_thread_page(
-    db_pool: &PgPool,
-    category_slug: &str,
-    thread_slug: &str,
-) -> Result<Option<ThreadPageRow>, sqlx::Error> {
-    query_as::<_, ThreadPageRow>(
-        r#"
-        SELECT
-            c.slug AS category_slug,
-            c.name AS category_name,
-            t.title,
-            COALESCE(opening_post.body_html, '') AS opening_post_html
-        FROM threads t
-        JOIN categories c ON c.id = t.category_id
-        LEFT JOIN LATERAL (
-            SELECT body_html
-            FROM posts
-            WHERE thread_id = t.id AND is_deleted = FALSE
-            ORDER BY created_at ASC, id ASC
-            LIMIT 1
-        ) AS opening_post ON TRUE
-        WHERE c.slug = $1 AND t.slug = $2 AND t.is_deleted = FALSE
-        "#,
-    )
-    .bind(category_slug)
-    .bind(thread_slug)
-    .fetch_optional(db_pool)
-    .await
+    Redirect::to(&format!("/t/{}-{}", thread.id, thread.slug)).into_response()
 }
 
 fn validate_create_thread_form(title: &str, body: &str) -> CreateThreadErrors {
@@ -502,6 +622,21 @@ fn slugify_title(title: &str) -> String {
     }
 }
 
+fn parse_thread_ref(thread_ref: &str) -> Option<(i64, String)> {
+    let (id, slug) = thread_ref.split_once('-')?;
+    let id = id.parse::<i64>().ok()?;
+
+    if slug.is_empty() {
+        return None;
+    }
+
+    Some((id, slug.to_owned()))
+}
+
+fn thread_post_item(row: ThreadPostRow) -> ThreadPostItem {
+    ThreadPostItem::new(row.username, row.created_at, row.edited_at, row.body_html)
+}
+
 fn render_create_thread_page(template: CreateThreadTemplate, status: StatusCode) -> Response {
     match template.render() {
         Ok(html) => (status, Html(html)).into_response(),
@@ -512,7 +647,7 @@ fn render_create_thread_page(template: CreateThreadTemplate, status: StatusCode)
     }
 }
 
-fn render_thread_page(template: ThreadPageTemplate, status: StatusCode) -> Response {
+fn render_thread_page(template: ThreadDetailTemplate, status: StatusCode) -> Response {
     match template.render() {
         Ok(html) => (status, Html(html)).into_response(),
         Err(render_error) => {
