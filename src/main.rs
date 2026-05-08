@@ -14,6 +14,7 @@ use tracing::{error, info};
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 mod config;
+mod models;
 mod state;
 mod templates;
 
