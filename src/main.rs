@@ -1,6 +1,8 @@
+use askama::Template;
 use axum::{
     extract::State,
     http::StatusCode,
+    response::Html,
     routing::get,
     Router,
 };
@@ -12,9 +14,11 @@ use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, Env
 
 mod config;
 mod state;
+mod templates;
 
 use config::Config;
 use state::AppState;
+use templates::HomeTemplate;
 
 use std::error::Error;
 
@@ -62,8 +66,18 @@ fn init_tracing(rust_log: &str) -> AppResult<()> {
     Ok(())
 }
 
-async fn root() -> &'static str {
-    "Hello, world!"
+async fn root() -> Result<Html<String>, StatusCode> {
+    HomeTemplate {
+        page_title: "Home",
+        heading: "Forum foundation is online.",
+        intro: "This starter page is rendered with Askama and inherits the shared base layout that future forum pages will extend.",
+    }
+    .render()
+    .map(Html)
+    .map_err(|error| {
+        error!(error = %error, "failed to render home template");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })
 }
 
 async fn healthz(State(state): State<AppState>) -> Result<&'static str, StatusCode> {
