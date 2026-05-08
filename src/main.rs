@@ -60,6 +60,12 @@ async fn main() -> AppResult<()> {
         middleware::from_fn_with_state(app_state.clone(), auth::require_auth);
     let require_auth_layer_for_post_delete =
         middleware::from_fn_with_state(app_state.clone(), auth::require_auth);
+    let require_admin_layer =
+        middleware::from_fn_with_state(app_state.clone(), auth::require_admin);
+    let admin_router = Router::new()
+        .route("/", get(admin_index))
+        .fallback(admin_not_found)
+        .route_layer(require_admin_layer);
 
     let app = Router::new()
         .route("/", get(categories::list_categories))
@@ -111,6 +117,7 @@ async fn main() -> AppResult<()> {
         .route("/c/{slug}", get(categories::show_category))
         .route("/u/{username}", get(profile::show_profile))
         .route("/healthz", get(healthz))
+        .nest("/admin", admin_router)
         .nest_service("/static", ServeDir::new("static"))
         .with_state(app_state)
         .layer(session_layer)
@@ -155,4 +162,12 @@ async fn healthz(State(state): State<AppState>) -> Result<&'static str, StatusCo
             error!(error = %error, "database health check failed");
             StatusCode::SERVICE_UNAVAILABLE
         })
+}
+
+async fn admin_index() -> &'static str {
+    "Admin area"
+}
+
+async fn admin_not_found() -> StatusCode {
+    StatusCode::NOT_FOUND
 }
