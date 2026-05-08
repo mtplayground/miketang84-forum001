@@ -10,7 +10,25 @@
   <body class="font-serif">
     <div class="flex min-h-screen flex-col">
       <header class="border-b border-white/15 bg-ink-900 px-6 py-5 text-parchment-50">
-        <strong>miketang84-forum001</strong>
+        <div class="mx-auto flex w-full max-w-4xl items-center justify-between gap-6">
+          <strong>miketang84-forum001</strong>
+          <nav class="flex items-center gap-3 text-sm font-semibold">
+            {% if is_authenticated %}
+              <form method="post" action="/logout">
+                <button class="rounded-full border border-white/20 px-4 py-2 text-parchment-50 transition hover:border-white/40 hover:bg-white/10" type="submit">
+                  Logout
+                </button>
+              </form>
+            {% else %}
+              <a class="rounded-full border border-white/20 px-4 py-2 text-parchment-50 transition hover:border-white/40 hover:bg-white/10" href="/login">
+                Login
+              </a>
+              <a class="rounded-full bg-parchment-50 px-4 py-2 text-ink-900 transition hover:bg-white" href="/register">
+                Register
+              </a>
+            {% endif %}
+          </nav>
+        </div>
       </header>
       <main class="mx-auto w-full max-w-4xl flex-1 px-6 py-16 sm:px-8 sm:py-20">
         {% block content %}{% endblock %}
