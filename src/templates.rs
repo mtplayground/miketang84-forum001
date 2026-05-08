@@ -37,7 +37,11 @@ pub struct RegistrationTemplate {
 }
 
 impl RegistrationTemplate {
-    pub fn new(form: RegistrationFormValues, errors: RegistrationErrors, is_authenticated: bool) -> Self {
+    pub fn new(
+        form: RegistrationFormValues,
+        errors: RegistrationErrors,
+        is_authenticated: bool,
+    ) -> Self {
         Self {
             page_title: "Register",
             form,
