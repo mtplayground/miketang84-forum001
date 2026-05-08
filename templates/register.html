@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+  <section class="rounded-3xl border border-stone-700/10 bg-white/85 p-10 shadow-panel backdrop-blur sm:p-12">
+    <p class="text-xs font-semibold uppercase tracking-[0.28em] text-ember-500">Create Account</p>
+    <h1 class="mt-4 text-4xl leading-none text-ink-900 sm:text-6xl">Join the forum.</h1>
+    <p class="mt-6 max-w-2xl text-lg leading-8 text-stone-700">
+      Pick a username, choose a password, and your session will start as soon as registration succeeds.
+    </p>
+
+    <form class="mt-10 space-y-6" method="post" action="/register">
+      <div>
+        <label class="mb-2 block text-sm font-semibold text-stone-800" for="username">Username</label>
+        <input
+          class="block w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-base text-stone-900 outline-none ring-0 transition focus:border-ember-500"
+          id="username"
+          name="username"
+          type="text"
+          autocomplete="username"
+          required
+          value="{{ form.username }}"
+        >
+        {% match errors.username %}
+          {% when Some with (message) %}
+            <p class="mt-2 text-sm text-red-700">{{ message }}</p>
+          {% when None %}
+          {% endmatch %}
+      </div>
+
+      <div>
+        <label class="mb-2 block text-sm font-semibold text-stone-800" for="password">Password</label>
+        <input
+          class="block w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-base text-stone-900 outline-none ring-0 transition focus:border-ember-500"
+          id="password"
+          name="password"
+          type="password"
+          autocomplete="new-password"
+          required
+        >
+        {% match errors.password %}
+          {% when Some with (message) %}
+            <p class="mt-2 text-sm text-red-700">{{ message }}</p>
+          {% when None %}
+          {% endmatch %}
+      </div>
+
+      <div>
+        <label class="mb-2 block text-sm font-semibold text-stone-800" for="confirm">Confirm password</label>
+        <input
+          class="block w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-base text-stone-900 outline-none ring-0 transition focus:border-ember-500"
+          id="confirm"
+          name="confirm"
+          type="password"
+          autocomplete="new-password"
+          required
+        >
+        {% match errors.confirm %}
+          {% when Some with (message) %}
+            <p class="mt-2 text-sm text-red-700">{{ message }}</p>
+          {% when None %}
+          {% endmatch %}
+      </div>
+
+      <button
+        class="inline-flex items-center rounded-full bg-ink-900 px-6 py-3 text-sm font-semibold text-parchment-50 transition hover:bg-stone-800"
+        type="submit"
+      >
+        Create account
+      </button>
+    </form>
+  </section>
+{% endblock %}
