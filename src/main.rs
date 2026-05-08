@@ -15,6 +15,7 @@ use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, Env
 
 mod config;
 mod models;
+mod password;
 mod state;
 mod templates;
 
