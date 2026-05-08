@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+  <section class="rounded-3xl border border-stone-700/10 bg-white/85 p-10 shadow-panel backdrop-blur sm:p-12">
+    <a class="text-sm font-semibold uppercase tracking-[0.24em] text-ember-600 underline decoration-ember-300 underline-offset-4" href="/admin/categories">
+      Back to Admin Categories
+    </a>
+
+    <h1 class="mt-4 text-4xl leading-none text-ink-900 sm:text-5xl">Edit Category</h1>
+
+    {% if !errors.is_empty() %}
+      <div class="mt-6 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+        {% if let Some(general_error) = errors.general %}
+          <p>{{ general_error }}</p>
+        {% endif %}
+        {% if let Some(name_error) = errors.name %}
+          <p>{{ name_error }}</p>
+        {% endif %}
+        {% if let Some(position_error) = errors.position %}
+          <p>{{ position_error }}</p>
+        {% endif %}
+      </div>
+    {% endif %}
+
+    <form class="mt-8 space-y-4" method="post" action="/admin/categories/{{ category_id }}/edit">
+      <div>
+        <label class="mb-2 block text-sm font-semibold text-ink-900" for="name">Name</label>
+        <input
+          id="name"
+          name="name"
+          type="text"
+          value="{{ form.name }}"
+          class="w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-sm text-ink-900 shadow-sm outline-none transition focus:border-ember-500 focus:ring-2 focus:ring-ember-200"
+        >
+      </div>
+
+      <div>
+        <label class="mb-2 block text-sm font-semibold text-ink-900" for="description">Description</label>
+        <textarea
+          id="description"
+          name="description"
+          rows="5"
+          class="w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-sm text-ink-900 shadow-sm outline-none transition focus:border-ember-500 focus:ring-2 focus:ring-ember-200"
+        >{{ form.description }}</textarea>
+      </div>
+
+      <div>
+        <label class="mb-2 block text-sm font-semibold text-ink-900" for="position">Position</label>
+        <input
+          id="position"
+          name="position"
+          type="number"
+          min="1"
+          value="{{ form.position }}"
+          class="w-32 rounded-2xl border border-stone-300 bg-white px-4 py-3 text-sm text-ink-900 shadow-sm outline-none transition focus:border-ember-500 focus:ring-2 focus:ring-ember-200"
+        >
+      </div>
+
+      <div class="flex flex-wrap items-center gap-3">
+        <button class="inline-flex items-center justify-center rounded-full bg-ink-900 px-6 py-3 text-sm font-semibold text-parchment-50 transition hover:bg-stone-800" type="submit">
+          Save Category
+        </button>
+        <a class="inline-flex items-center justify-center rounded-full border border-stone-300 px-6 py-3 text-sm font-semibold text-stone-700 transition hover:border-stone-400 hover:bg-stone-50" href="/admin/categories">
+          Cancel
+        </a>
+      </div>
+    </form>
+  </section>
+{% endblock %}

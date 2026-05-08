@@ -113,6 +113,102 @@ impl CategoryThreadListItem {
     }
 }
 
+pub struct AdminCategoryListItem {
+    pub id: i64,
+    pub slug: String,
+    pub name: String,
+    pub description: String,
+    pub position: i32,
+    pub thread_count: i64,
+    pub post_count: i64,
+}
+
+impl AdminCategoryListItem {
+    pub fn from_row(category_with_counts: crate::categories::CategoryWithCountsRow) -> Self {
+        Self {
+            id: category_with_counts.id,
+            slug: category_with_counts.slug,
+            name: category_with_counts.name,
+            description: category_with_counts.description,
+            position: category_with_counts.position,
+            thread_count: category_with_counts.thread_count,
+            post_count: category_with_counts.post_count,
+        }
+    }
+}
+
+#[derive(Default, Clone)]
+pub struct AdminCategoryFormValues {
+    pub name: String,
+    pub description: String,
+    pub position: String,
+}
+
+#[derive(Default, Clone)]
+pub struct AdminCategoryFormErrors {
+    pub name: Option<String>,
+    pub position: Option<String>,
+    pub general: Option<String>,
+}
+
+impl AdminCategoryFormErrors {
+    pub fn is_empty(&self) -> bool {
+        self.name.is_none() && self.position.is_none() && self.general.is_none()
+    }
+}
+
+#[derive(Template)]
+#[template(path = "admin_categories.html")]
+pub struct AdminCategoryListTemplate {
+    pub page_title: &'static str,
+    pub categories: Vec<AdminCategoryListItem>,
+    pub form: AdminCategoryFormValues,
+    pub errors: AdminCategoryFormErrors,
+    pub is_authenticated: bool,
+}
+
+impl AdminCategoryListTemplate {
+    pub fn new(
+        categories: Vec<AdminCategoryListItem>,
+        form: AdminCategoryFormValues,
+        errors: AdminCategoryFormErrors,
+    ) -> Self {
+        Self {
+            page_title: "Admin Categories",
+            categories,
+            form,
+            errors,
+            is_authenticated: true,
+        }
+    }
+}
+
+#[derive(Template)]
+#[template(path = "admin_category_edit.html")]
+pub struct AdminCategoryEditTemplate {
+    pub page_title: &'static str,
+    pub category_id: i64,
+    pub form: AdminCategoryFormValues,
+    pub errors: AdminCategoryFormErrors,
+    pub is_authenticated: bool,
+}
+
+impl AdminCategoryEditTemplate {
+    pub fn new(
+        category_id: i64,
+        form: AdminCategoryFormValues,
+        errors: AdminCategoryFormErrors,
+    ) -> Self {
+        Self {
+            page_title: "Edit Category",
+            category_id,
+            form,
+            errors,
+            is_authenticated: true,
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct CreateThreadFormValues {
     pub title: String,
