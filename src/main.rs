@@ -17,6 +17,7 @@ use tracing::{error, info};
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 mod auth;
+mod categories;
 mod config;
 mod login;
 mod models;
