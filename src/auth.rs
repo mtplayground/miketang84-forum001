@@ -1,5 +1,6 @@
 use axum::{
     extract::{FromRef, FromRequestParts, Request, State},
+    http::StatusCode,
     http::request::Parts,
     middleware::Next,
     response::{IntoResponse, Redirect, Response},
@@ -9,7 +10,10 @@ use std::{error::Error, fmt};
 use tower_sessions::Session;
 use tracing::error;
 
-use crate::{models::User, state::AppState};
+use crate::{
+    models::{User, UserRole},
+    state::AppState,
+};
 
 const USER_ID_SESSION_KEY: &str = "user_id";
 
@@ -81,6 +85,37 @@ pub async fn require_auth(State(state): State<AppState>, request: Request, next:
     let current_user = match load_current_user(&state, &session).await {
         Ok(Some(user)) => user,
         Ok(None) => return Redirect::to("/login").into_response(),
+        Err(db_error) => return internal_server_error(db_error),
+    };
+
+    parts.extensions.insert(CurrentUser(current_user));
+
+    next.run(Request::from_parts(parts, body)).await
+}
+
+pub async fn require_admin(
+    State(state): State<AppState>,
+    request: Request,
+    next: Next,
+) -> Response {
+    let (mut parts, body) = request.into_parts();
+
+    if let Some(current_user) = parts.extensions.get::<CurrentUser>() {
+        return if current_user.0.role == UserRole::Admin {
+            next.run(Request::from_parts(parts, body)).await
+        } else {
+            StatusCode::FORBIDDEN.into_response()
+        };
+    }
+
+    let session = match Session::from_request_parts(&mut parts, &state).await {
+        Ok(session) => session,
+        Err(rejection) => return rejection.into_response(),
+    };
+
+    let current_user = match load_current_user(&state, &session).await {
+        Ok(Some(user)) if user.role == UserRole::Admin => user,
+        Ok(Some(_)) | Ok(None) => return StatusCode::FORBIDDEN.into_response(),
         Err(db_error) => return internal_server_error(db_error),
     };
 
