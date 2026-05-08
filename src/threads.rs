@@ -17,7 +17,7 @@ use crate::{
     state::AppState,
     templates::{
         CreateThreadErrors, CreateThreadFormValues, CreateThreadTemplate, ThreadDetailTemplate,
-        ThreadPostItem,
+        ReplyErrors, ReplyFormValues, ThreadPostItem,
     },
 };
 
@@ -45,6 +45,11 @@ pub struct CreateThreadForm {
     pub body: String,
 }
 
+#[derive(Default, serde::Deserialize)]
+pub struct ReplyForm {
+    pub body: String,
+}
+
 #[derive(sqlx::FromRow)]
 struct ThreadDetailRow {
     id: i64,
@@ -52,6 +57,7 @@ struct ThreadDetailRow {
     title: String,
     category_slug: String,
     category_name: String,
+    is_locked: bool,
 }
 
 #[derive(sqlx::FromRow)]
@@ -217,7 +223,8 @@ impl ThreadRepository {
                 t.slug,
                 t.title,
                 c.slug AS category_slug,
-                c.name AS category_name
+                c.name AS category_name,
+                t.is_locked
             FROM threads t
             JOIN categories c ON c.id = t.category_id
             WHERE t.id = $1 AND t.is_deleted = FALSE
@@ -432,6 +439,135 @@ pub async fn show_thread(
     Path(thread_ref): Path<String>,
     Query(pagination_query): Query<PaginationQuery>,
 ) -> Response {
+    render_thread_detail_page(
+        &state,
+        current_user.is_authenticated(),
+        &thread_ref,
+        pagination_query.requested_page(),
+        ReplyFormValues::default(),
+        ReplyErrors::default(),
+        StatusCode::OK,
+    )
+    .await
+}
+
+pub async fn post_reply_to_thread(
+    State(state): State<AppState>,
+    CurrentUser(current_user): CurrentUser,
+    Path(thread_ref): Path<String>,
+    Form(form): Form<ReplyForm>,
+) -> Response {
+    let (thread_id, requested_slug) = match parse_thread_ref(&thread_ref) {
+        Some(parts) => parts,
+        None => return StatusCode::NOT_FOUND.into_response(),
+    };
+
+    let repository = ThreadRepository::new(state.db_pool.clone());
+    let thread = match repository.find_detail_by_id(thread_id).await {
+        Ok(Some(thread)) => thread,
+        Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+        Err(db_error) => {
+            error!(error = %db_error, thread_id, "failed to load thread detail for reply");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    if thread.slug != requested_slug {
+        return Redirect::to(&format!("/t/{}-{}", thread.id, thread.slug)).into_response();
+    }
+
+    let body = normalize_body(&form.body);
+    let form_values = ReplyFormValues { body: body.clone() };
+    let errors = validate_reply_form(&body, thread.is_locked);
+
+    if !errors.is_empty() {
+        let status = if thread.is_locked {
+            StatusCode::LOCKED
+        } else {
+            StatusCode::UNPROCESSABLE_ENTITY
+        };
+
+        return render_thread_detail_page(
+            &state,
+            true,
+            &thread_ref,
+            1,
+            form_values,
+            errors,
+            status,
+        )
+        .await;
+    }
+
+    let rendered_body_html = render_markdown(&body);
+    let now = Utc::now();
+    let mut transaction = match state.db_pool.begin().await {
+        Ok(transaction) => transaction,
+        Err(db_error) => {
+            error!(error = %db_error, thread_id, "failed to start reply transaction");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    if let Err(db_error) = query(
+        r#"
+        INSERT INTO posts (thread_id, user_id, body_md, body_html)
+        VALUES ($1, $2, $3, $4)
+        "#,
+    )
+    .bind(thread.id)
+    .bind(current_user.id)
+    .bind(&body)
+    .bind(&rendered_body_html)
+    .execute(&mut *transaction)
+    .await
+    {
+        error!(error = %db_error, thread_id = thread.id, "failed to insert reply post");
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    }
+
+    if let Err(db_error) = query(
+        r#"
+        UPDATE threads
+        SET last_activity_at = $2
+        WHERE id = $1
+        "#,
+    )
+    .bind(thread.id)
+    .bind(now)
+    .execute(&mut *transaction)
+    .await
+    {
+        error!(error = %db_error, thread_id = thread.id, "failed to update thread activity");
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    }
+
+    if let Err(db_error) = transaction.commit().await {
+        error!(error = %db_error, thread_id = thread.id, "failed to commit reply transaction");
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    }
+
+    let new_reply_count = match repository.count_replies(thread.id).await {
+        Ok(reply_count) => reply_count,
+        Err(db_error) => {
+            error!(error = %db_error, thread_id = thread.id, "failed to count replies after insert");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    let reply_page = ((new_reply_count + DEFAULT_PAGE_SIZE - 1) / DEFAULT_PAGE_SIZE).max(1);
+    Redirect::to(&format!("/t/{}-{}?page={reply_page}", thread.id, thread.slug)).into_response()
+}
+
+async fn render_thread_detail_page(
+    state: &AppState,
+    is_authenticated: bool,
+    thread_ref: &str,
+    requested_page: i64,
+    reply_form: ReplyFormValues,
+    reply_errors: ReplyErrors,
+    status: StatusCode,
+) -> Response {
     let (thread_id, requested_slug) = match parse_thread_ref(&thread_ref) {
         Some(parts) => parts,
         None => return StatusCode::NOT_FOUND.into_response(),
@@ -469,11 +605,7 @@ pub async fn show_thread(
         }
     };
 
-    let pagination = Pagination::new(
-        pagination_query.requested_page(),
-        DEFAULT_PAGE_SIZE,
-        reply_count,
-    );
+    let pagination = Pagination::new(requested_page, DEFAULT_PAGE_SIZE, reply_count);
 
     let replies = match repository
         .list_replies_page(thread.id, pagination.per_page, pagination.offset())
@@ -496,10 +628,13 @@ pub async fn show_thread(
         replies.into_iter().map(thread_post_item).collect(),
         reply_count,
         pagination,
-        current_user.is_authenticated(),
+        is_authenticated,
+        thread.is_locked,
+        reply_form,
+        reply_errors,
     );
 
-    render_thread_page(template, StatusCode::OK)
+    render_thread_page(template, status)
 }
 
 pub async fn show_thread_legacy(
@@ -564,6 +699,25 @@ fn validate_create_thread_form(title: &str, body: &str) -> CreateThreadErrors {
 
 fn normalize_body(body: &str) -> String {
     body.replace("\r\n", "\n")
+}
+
+fn validate_reply_form(body: &str, is_locked: bool) -> ReplyErrors {
+    let mut errors = ReplyErrors::default();
+
+    if is_locked {
+        errors.general = Some("This thread is locked and cannot receive new replies.".to_owned());
+        return errors;
+    }
+
+    if body.trim().is_empty() {
+        errors.body = Some("Enter a reply before posting.".to_owned());
+    } else if body.chars().count() > THREAD_BODY_MAX_LENGTH {
+        errors.body = Some(format!(
+            "Reply must be at most {THREAD_BODY_MAX_LENGTH} characters."
+        ));
+    }
+
+    errors
 }
 
 async fn generate_unique_thread_slug(

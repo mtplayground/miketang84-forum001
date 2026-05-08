@@ -175,6 +175,9 @@ pub struct ThreadDetailTemplate {
     pub reply_count: i64,
     pub pagination: Pagination,
     pub is_authenticated: bool,
+    pub is_locked: bool,
+    pub reply_form: ReplyFormValues,
+    pub reply_errors: ReplyErrors,
 }
 
 impl ThreadDetailTemplate {
@@ -189,6 +192,9 @@ impl ThreadDetailTemplate {
         reply_count: i64,
         pagination: Pagination,
         is_authenticated: bool,
+        is_locked: bool,
+        reply_form: ReplyFormValues,
+        reply_errors: ReplyErrors,
     ) -> Self {
         Self {
             page_title: title.clone(),
@@ -201,7 +207,27 @@ impl ThreadDetailTemplate {
             reply_count,
             pagination,
             is_authenticated,
+            is_locked,
+            reply_form,
+            reply_errors,
         }
+    }
+}
+
+#[derive(Default)]
+pub struct ReplyFormValues {
+    pub body: String,
+}
+
+#[derive(Default)]
+pub struct ReplyErrors {
+    pub body: Option<String>,
+    pub general: Option<String>,
+}
+
+impl ReplyErrors {
+    pub fn is_empty(&self) -> bool {
+        self.body.is_none() && self.general.is_none()
     }
 }
 
