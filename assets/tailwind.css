@@ -1,0 +1,12 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply m-0 bg-parchment-50 text-ink-900 antialiased;
+    background:
+      radial-gradient(circle at top, rgba(190, 147, 94, 0.24), transparent 32rem),
+      linear-gradient(180deg, #fbf7f0 0%, #f3ebdf 100%);
+  }
+}

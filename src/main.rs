@@ -9,6 +9,7 @@ use axum::{
 use sqlx::query_scalar;
 use tokio::net::TcpListener;
 use tower::ServiceBuilder;
+use tower_http::services::ServeDir;
 use tracing::{error, info};
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
@@ -33,6 +34,7 @@ async fn main() -> AppResult<()> {
     let app = Router::new()
         .route("/", get(root))
         .route("/healthz", get(healthz))
+        .nest_service("/static", ServeDir::new("static"))
         .with_state(app_state)
         .layer(ServiceBuilder::new());
 

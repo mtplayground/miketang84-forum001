@@ -3,9 +3,9 @@
 {% block title %}{{ page_title }}{% endblock %}
 
 {% block content %}
-  <section class="card">
-    <p class="eyebrow">Starter Home</p>
-    <h1>{{ heading }}</h1>
-    <p>{{ intro }}</p>
+  <section class="rounded-3xl border border-stone-700/10 bg-white/85 p-10 shadow-panel backdrop-blur sm:p-12">
+    <p class="text-xs font-semibold uppercase tracking-[0.28em] text-ember-500">Starter Home</p>
+    <h1 class="mt-4 text-4xl leading-none text-ink-900 sm:text-6xl">{{ heading }}</h1>
+    <p class="mt-6 max-w-2xl text-lg leading-8 text-stone-700">{{ intro }}</p>
   </section>
 {% endblock %}
