@@ -156,6 +156,51 @@ impl ThreadRepository {
         .await
     }
 
+    pub async fn count_by_category(&self, category_id: i64) -> Result<i64, sqlx::Error> {
+        query_scalar::<_, i64>(
+            r#"
+            SELECT COUNT(*)::bigint
+            FROM threads
+            WHERE category_id = $1 AND is_deleted = FALSE
+            "#,
+        )
+        .bind(category_id)
+        .fetch_one(&self.db_pool)
+        .await
+    }
+
+    pub async fn list_by_category_page(
+        &self,
+        category_id: i64,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<Thread>, sqlx::Error> {
+        query_as::<_, Thread>(
+            r#"
+            SELECT
+                id,
+                category_id,
+                user_id,
+                title,
+                slug,
+                is_pinned,
+                is_locked,
+                is_deleted,
+                created_at,
+                last_activity_at
+            FROM threads
+            WHERE category_id = $1 AND is_deleted = FALSE
+            ORDER BY is_pinned DESC, last_activity_at DESC, id DESC
+            LIMIT $2 OFFSET $3
+            "#,
+        )
+        .bind(category_id)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&self.db_pool)
+        .await
+    }
+
     pub async fn touch_last_activity(
         &self,
         id: i64,

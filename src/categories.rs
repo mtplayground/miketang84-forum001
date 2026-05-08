@@ -1,6 +1,6 @@
 use askama::Template;
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::{Html, IntoResponse, Response},
 };
@@ -10,8 +10,10 @@ use tracing::error;
 use crate::{
     auth::MaybeCurrentUser,
     models::Category,
+    pagination::{Pagination, PaginationQuery, DEFAULT_PAGE_SIZE},
     state::AppState,
-    templates::{CategoryDetailTemplate, CategoryIndexItem, CategoryIndexTemplate},
+    templates::{CategoryDetailTemplate, CategoryIndexItem, CategoryIndexTemplate, CategoryThreadListItem},
+    threads::ThreadRepository,
 };
 
 #[derive(sqlx::FromRow)]
@@ -168,8 +170,10 @@ pub async fn show_category(
     State(state): State<AppState>,
     current_user: MaybeCurrentUser,
     Path(slug): Path<String>,
+    Query(pagination_query): Query<PaginationQuery>,
 ) -> Response {
     let repository = CategoryRepository::new(state.db_pool.clone());
+    let thread_repository = ThreadRepository::new(state.db_pool.clone());
 
     let category = match repository.find_by_slug_with_counts(&slug).await {
         Ok(Some(category)) => category,
@@ -180,8 +184,43 @@ pub async fn show_category(
         }
     };
 
+    let total_threads = match thread_repository.count_by_category(category.id).await {
+        Ok(total_threads) => total_threads,
+        Err(db_error) => {
+            error!(error = %db_error, category_id = category.id, "failed to count category threads");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    let pagination = Pagination::new(
+        pagination_query.requested_page(),
+        DEFAULT_PAGE_SIZE,
+        total_threads,
+    );
+
+    let threads = match thread_repository
+        .list_by_category_page(category.id, pagination.per_page, pagination.offset())
+        .await
+    {
+        Ok(threads) => threads,
+        Err(db_error) => {
+            error!(error = %db_error, category_id = category.id, "failed to list category threads");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    let thread_items = threads
+        .into_iter()
+        .map(CategoryThreadListItem::from_thread)
+        .collect();
+
     render_html(
-        CategoryDetailTemplate::from_category_with_counts(category, current_user.is_authenticated()),
+        CategoryDetailTemplate::from_category_with_counts(
+            category,
+            current_user.is_authenticated(),
+            thread_items,
+            pagination,
+        ),
         StatusCode::OK,
         "failed to render category detail template",
     )

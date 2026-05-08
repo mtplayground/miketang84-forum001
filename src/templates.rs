@@ -1,4 +1,6 @@
 use crate::models::Category;
+use crate::models::Thread;
+use crate::pagination::Pagination;
 use askama::Template;
 
 pub struct CategoryIndexItem {
@@ -61,6 +63,8 @@ pub struct CategoryDetailTemplate {
     pub description: String,
     pub thread_count: i64,
     pub post_count: i64,
+    pub threads: Vec<CategoryThreadListItem>,
+    pub pagination: Pagination,
     pub is_authenticated: bool,
 }
 
@@ -68,6 +72,8 @@ impl CategoryDetailTemplate {
     pub fn from_category_with_counts(
         category_with_counts: crate::categories::CategoryWithCountsRow,
         is_authenticated: bool,
+        threads: Vec<CategoryThreadListItem>,
+        pagination: Pagination,
     ) -> Self {
         Self {
             page_title: category_with_counts.name.clone(),
@@ -80,7 +86,27 @@ impl CategoryDetailTemplate {
             },
             thread_count: category_with_counts.thread_count,
             post_count: category_with_counts.post_count,
+            threads,
+            pagination,
             is_authenticated,
+        }
+    }
+}
+
+pub struct CategoryThreadListItem {
+    pub title: String,
+    pub slug: String,
+    pub is_pinned: bool,
+    pub last_activity_on: String,
+}
+
+impl CategoryThreadListItem {
+    pub fn from_thread(thread: Thread) -> Self {
+        Self {
+            title: thread.title,
+            slug: thread.slug,
+            is_pinned: thread.is_pinned,
+            last_activity_on: thread.last_activity_at.format("%B %-d, %Y").to_string(),
         }
     }
 }

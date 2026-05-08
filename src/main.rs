@@ -20,6 +20,7 @@ mod config;
 mod login;
 mod markdown;
 mod models;
+mod pagination;
 mod password;
 mod posts;
 mod profile;
