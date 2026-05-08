@@ -1,6 +1,8 @@
-use sqlx::{postgres::PgPoolOptions, PgPool};
+use sqlx::{migrate::Migrator, postgres::PgPoolOptions, PgPool};
 
 use crate::config::Config;
+
+static MIGRATOR: Migrator = sqlx::migrate!();
 
 #[derive(Clone)]
 pub struct AppState {
@@ -13,6 +15,8 @@ impl AppState {
             .max_connections(5)
             .connect(&config.database_url)
             .await?;
+
+        MIGRATOR.run(&db_pool).await?;
 
         Ok(Self { db_pool })
     }
