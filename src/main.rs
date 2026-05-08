@@ -50,6 +50,8 @@ async fn main() -> AppResult<()> {
     let require_auth_layer = middleware::from_fn_with_state(app_state.clone(), auth::require_auth);
     let require_auth_layer_for_settings =
         middleware::from_fn_with_state(app_state.clone(), auth::require_auth);
+    let require_auth_layer_for_password =
+        middleware::from_fn_with_state(app_state.clone(), auth::require_auth);
 
     let app = Router::new()
         .route("/", get(root))
@@ -67,6 +69,12 @@ async fn main() -> AppResult<()> {
             get(settings::get_profile_settings)
                 .post(settings::post_profile_settings)
                 .route_layer(require_auth_layer_for_settings),
+        )
+        .route(
+            "/settings/password",
+            get(settings::get_password_settings)
+                .post(settings::post_password_settings)
+                .route_layer(require_auth_layer_for_password),
         )
         .route("/u/{username}", get(profile::show_profile))
         .route("/healthz", get(healthz))
