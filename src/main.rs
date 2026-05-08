@@ -20,12 +20,14 @@ mod config;
 mod login;
 mod models;
 mod password;
+mod posts;
 mod profile;
 mod registration;
 mod session;
 mod settings;
 mod state;
 mod templates;
+mod threads;
 
 use config::Config;
 use session::session_encryption_key;

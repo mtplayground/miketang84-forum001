@@ -31,3 +31,31 @@ pub struct Category {
     pub position: i32,
     pub created_at: DateTime<Utc>,
 }
+
+#[derive(Debug, Clone, sqlx::FromRow)]
+#[allow(dead_code)]
+pub struct Thread {
+    pub id: i64,
+    pub category_id: i64,
+    pub user_id: i64,
+    pub title: String,
+    pub slug: String,
+    pub is_pinned: bool,
+    pub is_locked: bool,
+    pub is_deleted: bool,
+    pub created_at: DateTime<Utc>,
+    pub last_activity_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, sqlx::FromRow)]
+#[allow(dead_code)]
+pub struct Post {
+    pub id: i64,
+    pub thread_id: i64,
+    pub user_id: i64,
+    pub body_md: String,
+    pub body_html: String,
+    pub edited_at: Option<DateTime<Utc>>,
+    pub is_deleted: bool,
+    pub created_at: DateTime<Utc>,
+}
