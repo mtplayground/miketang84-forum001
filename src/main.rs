@@ -53,6 +53,8 @@ async fn main() -> AppResult<()> {
         middleware::from_fn_with_state(app_state.clone(), auth::require_auth);
     let require_auth_layer_for_password =
         middleware::from_fn_with_state(app_state.clone(), auth::require_auth);
+    let require_auth_layer_for_thread_create =
+        middleware::from_fn_with_state(app_state.clone(), auth::require_auth);
 
     let app = Router::new()
         .route("/", get(categories::list_categories))
@@ -77,6 +79,13 @@ async fn main() -> AppResult<()> {
                 .post(settings::post_password_settings)
                 .route_layer(require_auth_layer_for_password),
         )
+        .route(
+            "/c/{slug}/new",
+            get(threads::get_create_thread)
+                .post(threads::post_create_thread)
+                .route_layer(require_auth_layer_for_thread_create),
+        )
+        .route("/c/{category_slug}/t/{thread_slug}", get(threads::show_thread))
         .route("/c/{slug}", get(categories::show_category))
         .route("/u/{username}", get(profile::show_profile))
         .route("/healthz", get(healthz))
