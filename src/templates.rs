@@ -165,3 +165,37 @@ impl ProfileSettingsTemplate {
         }
     }
 }
+
+#[derive(Default)]
+pub struct PasswordSettingsErrors {
+    pub current_password: Option<String>,
+    pub new_password: Option<String>,
+}
+
+impl PasswordSettingsErrors {
+    pub fn is_empty(&self) -> bool {
+        self.current_password.is_none() && self.new_password.is_none()
+    }
+}
+
+#[derive(Template)]
+#[template(path = "settings_password.html")]
+pub struct PasswordSettingsTemplate {
+    pub page_title: &'static str,
+    pub username: String,
+    pub errors: PasswordSettingsErrors,
+    pub is_authenticated: bool,
+    pub saved: bool,
+}
+
+impl PasswordSettingsTemplate {
+    pub fn new(username: String, errors: PasswordSettingsErrors, saved: bool) -> Self {
+        Self {
+            page_title: "Change Password",
+            username,
+            errors,
+            is_authenticated: true,
+            saved,
+        }
+    }
+}

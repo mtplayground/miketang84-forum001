@@ -10,6 +10,15 @@
       Update the public bio shown on <a class="font-semibold text-ember-600 underline decoration-ember-300 underline-offset-4" href="/u/{{ username }}">your profile page</a>.
     </p>
 
+    <div class="mt-8 flex flex-wrap gap-3">
+      <a class="rounded-full bg-ink-900 px-5 py-2 text-sm font-semibold text-parchment-50" href="/settings/profile">
+        Profile
+      </a>
+      <a class="rounded-full border border-stone-300 px-5 py-2 text-sm font-semibold text-stone-700 transition hover:border-stone-400 hover:bg-stone-50" href="/settings/password">
+        Password
+      </a>
+    </div>
+
     {% if saved %}
       <div class="mt-8 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm font-semibold text-emerald-900">
         Profile updated.
