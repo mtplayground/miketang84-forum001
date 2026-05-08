@@ -21,6 +21,7 @@ mod config;
 mod login;
 mod models;
 mod password;
+mod profile;
 mod registration;
 mod session;
 mod state;
@@ -58,6 +59,7 @@ async fn main() -> AppResult<()> {
             "/register",
             get(registration::get_registration).post(registration::post_registration),
         )
+        .route("/u/{username}", get(profile::show_profile))
         .route("/healthz", get(healthz))
         .nest_service("/static", ServeDir::new("static"))
         .with_state(app_state)

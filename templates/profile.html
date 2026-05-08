@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+  <section class="rounded-3xl border border-stone-700/10 bg-white/85 p-10 shadow-panel backdrop-blur sm:p-12">
+    <p class="text-xs font-semibold uppercase tracking-[0.28em] text-ember-500">Public Profile</p>
+    <div class="mt-4 flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
+      <div>
+        <h1 class="text-4xl leading-none text-ink-900 sm:text-5xl">{{ username }}</h1>
+        <p class="mt-4 text-sm font-semibold uppercase tracking-[0.24em] text-stone-500">
+          Joined {{ joined_on }}
+        </p>
+      </div>
+      <div class="rounded-2xl border border-stone-200 bg-stone-50 px-6 py-5 text-center">
+        <p class="text-xs font-semibold uppercase tracking-[0.24em] text-stone-500">Posts</p>
+        <p class="mt-2 text-3xl font-semibold text-ink-900">{{ post_count }}</p>
+      </div>
+    </div>
+
+    <div class="mt-10 rounded-3xl bg-stone-50/90 p-6 sm:p-8">
+      <p class="text-xs font-semibold uppercase tracking-[0.24em] text-stone-500">Bio</p>
+      <p class="mt-4 max-w-3xl whitespace-pre-line text-base leading-8 text-stone-700">{{ bio }}</p>
+    </div>
+  </section>
+{% endblock %}
