@@ -20,3 +20,14 @@ pub struct User {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
+
+#[derive(Debug, Clone, sqlx::FromRow)]
+#[allow(dead_code)]
+pub struct Category {
+    pub id: i64,
+    pub slug: String,
+    pub name: String,
+    pub description: String,
+    pub position: i32,
+    pub created_at: DateTime<Utc>,
+}
