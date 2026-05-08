@@ -13,5 +13,7 @@ sqlx = { version = "0.8", features = ["chrono", "postgres", "runtime-tokio-rustl
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "net"] }
 tower = "0.5"
 tower-http = { version = "0.6", features = ["fs"] }
+tower-sessions = { version = "0.14", default-features = false, features = ["axum-core", "private"] }
+tower-sessions-sqlx-store = { version = "0.15", features = ["postgres"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
