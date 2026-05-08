@@ -88,3 +88,35 @@ impl LoginTemplate {
         }
     }
 }
+
+#[derive(Template)]
+#[template(path = "profile.html")]
+pub struct ProfileTemplate {
+    pub page_title: String,
+    pub username: String,
+    pub joined_on: String,
+    pub bio: String,
+    pub post_count: i64,
+    pub is_authenticated: bool,
+}
+
+impl ProfileTemplate {
+    pub fn from_user(user: crate::models::User, is_authenticated: bool, post_count: i64) -> Self {
+        let page_title = format!("{}'s profile", user.username);
+        let joined_on = user.created_at.format("%B %-d, %Y").to_string();
+        let bio = if user.bio.trim().is_empty() {
+            "This user has not written a bio yet.".to_owned()
+        } else {
+            user.bio
+        };
+
+        Self {
+            page_title,
+            username: user.username,
+            joined_on,
+            bio,
+            post_count,
+            is_authenticated,
+        }
+    }
+}
