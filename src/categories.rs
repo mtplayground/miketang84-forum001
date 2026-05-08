@@ -16,7 +16,7 @@ use crate::{
     threads::ThreadRepository,
 };
 
-#[derive(sqlx::FromRow)]
+#[derive(Clone, sqlx::FromRow)]
 pub(crate) struct CategoryWithCountsRow {
     pub(crate) id: i64,
     pub(crate) slug: String,
@@ -61,6 +61,19 @@ impl CategoryRepository {
             "#,
         )
         .bind(slug)
+        .fetch_optional(&self.db_pool)
+        .await
+    }
+
+    pub async fn find_by_id(&self, id: i64) -> Result<Option<Category>, sqlx::Error> {
+        query_as::<_, Category>(
+            r#"
+            SELECT id, slug, name, description, position, created_at
+            FROM categories
+            WHERE id = $1
+            "#,
+        )
+        .bind(id)
         .fetch_optional(&self.db_pool)
         .await
     }

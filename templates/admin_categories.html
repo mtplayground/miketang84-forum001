@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+  <section class="space-y-8">
+    <div class="rounded-3xl border border-stone-700/10 bg-white/85 p-10 shadow-panel backdrop-blur sm:p-12">
+      <p class="text-xs font-semibold uppercase tracking-[0.24em] text-stone-500">Admin</p>
+      <h1 class="mt-4 text-4xl leading-none text-ink-900 sm:text-5xl">Category Management</h1>
+      <p class="mt-4 max-w-3xl text-lg leading-8 text-stone-700">
+        Create, reorder, edit, and delete forum categories. Slugs are generated automatically from the category name.
+      </p>
+    </div>
+
+    <section class="rounded-3xl border border-stone-200 bg-white px-6 py-6 shadow-sm">
+      <div class="flex items-center justify-between gap-4">
+        <h2 class="text-2xl font-semibold text-ink-900">Categories</h2>
+        <p class="text-sm text-stone-500">{{ categories.len() }} total</p>
+      </div>
+
+      {% if categories.is_empty() %}
+        <p class="mt-6 text-sm text-stone-600">No categories have been created yet.</p>
+      {% else %}
+        <div class="mt-6 space-y-4">
+          {% for category in categories %}
+            <article class="rounded-3xl border border-stone-200 bg-stone-50/80 px-6 py-5">
+              <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div class="space-y-2">
+                  <div class="flex flex-wrap items-center gap-3">
+                    <h3 class="text-xl font-semibold text-ink-900">{{ category.name }}</h3>
+                    <span class="rounded-full bg-stone-200 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-stone-700">
+                      /c/{{ category.slug }}
+                    </span>
+                  </div>
+                  <p class="text-sm text-stone-600">{{ category.description }}</p>
+                  <dl class="flex flex-wrap gap-4 text-sm text-stone-500">
+                    <div><dt class="inline font-semibold text-stone-700">Threads:</dt> <dd class="inline">{{ category.thread_count }}</dd></div>
+                    <div><dt class="inline font-semibold text-stone-700">Posts:</dt> <dd class="inline">{{ category.post_count }}</dd></div>
+                  </dl>
+                </div>
+
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+                  <form class="flex items-center gap-2" method="post" action="/admin/categories/{{ category.id }}/position">
+                    <label class="text-xs font-semibold uppercase tracking-[0.18em] text-stone-500" for="position-{{ category.id }}">Position</label>
+                    <input
+                      id="position-{{ category.id }}"
+                      name="position"
+                      type="number"
+                      min="1"
+                      max="{{ categories.len() }}"
+                      value="{{ category.position }}"
+                      class="w-20 rounded-xl border border-stone-300 bg-white px-3 py-2 text-sm text-ink-900"
+                    >
+                    <button class="rounded-full border border-stone-300 px-4 py-2 text-sm font-semibold text-stone-700 transition hover:border-stone-400 hover:bg-white" type="submit">
+                      Reorder
+                    </button>
+                  </form>
+
+                  <a class="rounded-full border border-ember-300 px-4 py-2 text-sm font-semibold text-ember-700 transition hover:bg-ember-50" href="/admin/categories/{{ category.id }}/edit">
+                    Edit
+                  </a>
+
+                  <form method="post" action="/admin/categories/{{ category.id }}/delete">
+                    <button class="rounded-full border border-rose-300 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-50" type="submit">
+                      Delete
+                    </button>
+                  </form>
+                </div>
+              </div>
+            </article>
+          {% endfor %}
+        </div>
+      {% endif %}
+    </section>
+
+    <section class="rounded-3xl border border-stone-200 bg-white px-6 py-6 shadow-sm">
+      <h2 class="text-2xl font-semibold text-ink-900">Create Category</h2>
+
+      {% if !errors.is_empty() %}
+        <div class="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+          {% if let Some(general_error) = errors.general %}
+            <p>{{ general_error }}</p>
+          {% endif %}
+          {% if let Some(name_error) = errors.name %}
+            <p>{{ name_error }}</p>
+          {% endif %}
+          {% if let Some(position_error) = errors.position %}
+            <p>{{ position_error }}</p>
+          {% endif %}
+        </div>
+      {% endif %}
+
+      <form class="mt-6 space-y-4" method="post" action="/admin/categories">
+        <div>
+          <label class="mb-2 block text-sm font-semibold text-ink-900" for="name">Name</label>
+          <input
+            id="name"
+            name="name"
+            type="text"
+            value="{{ form.name }}"
+            class="w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-sm text-ink-900 shadow-sm outline-none transition focus:border-ember-500 focus:ring-2 focus:ring-ember-200"
+          >
+        </div>
+
+        <div>
+          <label class="mb-2 block text-sm font-semibold text-ink-900" for="description">Description</label>
+          <textarea
+            id="description"
+            name="description"
+            rows="4"
+            class="w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-sm text-ink-900 shadow-sm outline-none transition focus:border-ember-500 focus:ring-2 focus:ring-ember-200"
+          >{{ form.description }}</textarea>
+        </div>
+
+        <div>
+          <label class="mb-2 block text-sm font-semibold text-ink-900" for="position">Position</label>
+          <input
+            id="position"
+            name="position"
+            type="number"
+            min="1"
+            value="{{ form.position }}"
+            class="w-32 rounded-2xl border border-stone-300 bg-white px-4 py-3 text-sm text-ink-900 shadow-sm outline-none transition focus:border-ember-500 focus:ring-2 focus:ring-ember-200"
+          >
+        </div>
+
+        <button class="inline-flex items-center justify-center rounded-full bg-ink-900 px-6 py-3 text-sm font-semibold text-parchment-50 transition hover:bg-stone-800" type="submit">
+          Create Category
+        </button>
+      </form>
+    </section>
+  </section>
+{% endblock %}
