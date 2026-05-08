@@ -10,16 +10,20 @@ use sqlx::query_scalar;
 use tokio::net::TcpListener;
 use tower::ServiceBuilder;
 use tower_http::services::ServeDir;
+use tower_sessions::{cookie::SameSite, SessionManagerLayer};
+use tower_sessions_sqlx_store::PostgresStore;
 use tracing::{error, info};
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 mod config;
 mod models;
 mod password;
+mod session;
 mod state;
 mod templates;
 
 use config::Config;
+use session::session_encryption_key;
 use state::AppState;
 use templates::HomeTemplate;
 
@@ -32,12 +36,17 @@ async fn main() -> AppResult<()> {
     let config = Config::from_env()?;
     init_tracing(&config.rust_log)?;
     let app_state = AppState::from_config(&config).await?;
+    let session_store = PostgresStore::new(app_state.db_pool.clone());
+    let session_layer = SessionManagerLayer::new(session_store)
+        .with_same_site(SameSite::Lax)
+        .with_private(session_encryption_key(&config.session_secret)?);
 
     let app = Router::new()
         .route("/", get(root))
         .route("/healthz", get(healthz))
         .nest_service("/static", ServeDir::new("static"))
         .with_state(app_state)
+        .layer(session_layer)
         .layer(ServiceBuilder::new());
 
     let listener = TcpListener::bind(config.bind_addr).await?;
