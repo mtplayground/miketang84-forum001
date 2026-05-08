@@ -1,0 +1,10 @@
+.git
+.github
+.claude
+target
+node_modules
+.gh_token
+.database_url
+.env.production
+.progress
+.db_decision
