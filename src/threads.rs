@@ -4,7 +4,7 @@ use axum::{
     http::StatusCode,
     response::{Html, IntoResponse, Redirect, Response},
 };
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 use sqlx::{query, query_as, query_scalar, PgPool};
 use tracing::error;
 
@@ -17,13 +17,15 @@ use crate::{
     state::AppState,
     templates::{
         CreateThreadErrors, CreateThreadFormValues, CreateThreadTemplate, ThreadDetailTemplate,
-        ReplyErrors, ReplyFormValues, ThreadPostItem,
+        EditPostErrors, EditPostFormValues, EditPostTemplate, ReplyErrors, ReplyFormValues,
+        ThreadPostItem,
     },
 };
 
 const THREAD_TITLE_MIN_LENGTH: usize = 3;
 const THREAD_TITLE_MAX_LENGTH: usize = 120;
 const THREAD_BODY_MAX_LENGTH: usize = 20_000;
+const POST_EDIT_WINDOW_MINUTES: i64 = 15;
 
 #[derive(Clone)]
 #[allow(dead_code)]
@@ -50,6 +52,28 @@ pub struct ReplyForm {
     pub body: String,
 }
 
+#[derive(Default, serde::Deserialize)]
+pub struct EditPostForm {
+    pub body: String,
+    pub return_page: Option<i64>,
+}
+
+#[derive(Default, serde::Deserialize)]
+pub struct DeletePostForm {
+    pub return_page: Option<i64>,
+}
+
+#[derive(Default, serde::Deserialize)]
+pub struct PostPageQuery {
+    pub page: Option<i64>,
+}
+
+impl PostPageQuery {
+    fn requested_page(&self) -> i64 {
+        self.page.unwrap_or(1).max(1)
+    }
+}
+
 #[derive(sqlx::FromRow)]
 struct ThreadDetailRow {
     id: i64,
@@ -62,10 +86,27 @@ struct ThreadDetailRow {
 
 #[derive(sqlx::FromRow)]
 struct ThreadPostRow {
+    id: i64,
+    user_id: i64,
     username: String,
     body_html: String,
     created_at: DateTime<Utc>,
     edited_at: Option<DateTime<Utc>>,
+    is_deleted: bool,
+    has_later_posts: bool,
+}
+
+#[derive(sqlx::FromRow)]
+struct EditPostRow {
+    post_id: i64,
+    user_id: i64,
+    body_md: String,
+    created_at: DateTime<Utc>,
+    is_deleted: bool,
+    has_later_posts: bool,
+    thread_id: i64,
+    thread_slug: String,
+    thread_title: String,
 }
 
 #[allow(dead_code)]
@@ -239,13 +280,22 @@ impl ThreadRepository {
         query_as::<_, ThreadPostRow>(
             r#"
             SELECT
+                p.id,
+                p.user_id,
                 u.username,
                 p.body_html,
                 p.created_at,
-                p.edited_at
+                p.edited_at,
+                p.is_deleted,
+                EXISTS (
+                    SELECT 1
+                    FROM posts later
+                    WHERE later.thread_id = p.thread_id
+                      AND (later.created_at, later.id) > (p.created_at, p.id)
+                ) AS has_later_posts
             FROM posts p
             JOIN users u ON u.id = p.user_id
-            WHERE p.thread_id = $1 AND p.is_deleted = FALSE
+            WHERE p.thread_id = $1
             ORDER BY p.created_at ASC, p.id ASC
             LIMIT 1
             "#,
@@ -260,7 +310,7 @@ impl ThreadRepository {
             r#"
             SELECT GREATEST(COUNT(*)::bigint - 1, 0)
             FROM posts
-            WHERE thread_id = $1 AND is_deleted = FALSE
+            WHERE thread_id = $1
             "#,
         )
         .bind(thread_id)
@@ -277,13 +327,22 @@ impl ThreadRepository {
         query_as::<_, ThreadPostRow>(
             r#"
             SELECT
+                p.id,
+                p.user_id,
                 u.username,
                 p.body_html,
                 p.created_at,
-                p.edited_at
+                p.edited_at,
+                p.is_deleted,
+                EXISTS (
+                    SELECT 1
+                    FROM posts later
+                    WHERE later.thread_id = p.thread_id
+                      AND (later.created_at, later.id) > (p.created_at, p.id)
+                ) AS has_later_posts
             FROM posts p
             JOIN users u ON u.id = p.user_id
-            WHERE p.thread_id = $1 AND p.is_deleted = FALSE
+            WHERE p.thread_id = $1
             ORDER BY p.created_at ASC, p.id ASC
             OFFSET $2 + 1
             LIMIT $3
@@ -294,6 +353,69 @@ impl ThreadRepository {
         .bind(limit)
         .fetch_all(&self.db_pool)
         .await
+    }
+
+    async fn find_post_for_edit(&self, post_id: i64) -> Result<Option<EditPostRow>, sqlx::Error> {
+        query_as::<_, EditPostRow>(
+            r#"
+            SELECT
+                p.id AS post_id,
+                p.user_id,
+                p.body_md,
+                p.created_at,
+                p.is_deleted,
+                EXISTS (
+                    SELECT 1
+                    FROM posts later
+                    WHERE later.thread_id = p.thread_id
+                      AND (later.created_at, later.id) > (p.created_at, p.id)
+                ) AS has_later_posts,
+                t.id AS thread_id,
+                t.slug AS thread_slug,
+                t.title AS thread_title
+            FROM posts p
+            JOIN threads t ON t.id = p.thread_id
+            WHERE p.id = $1 AND t.is_deleted = FALSE
+            "#,
+        )
+        .bind(post_id)
+        .fetch_optional(&self.db_pool)
+        .await
+    }
+
+    async fn update_post(
+        &self,
+        post_id: i64,
+        body_md: &str,
+        body_html: &str,
+    ) -> Result<(), sqlx::Error> {
+        query(
+            r#"
+            UPDATE posts
+            SET body_md = $2, body_html = $3, edited_at = NOW()
+            WHERE id = $1
+            "#,
+        )
+        .bind(post_id)
+        .bind(body_md)
+        .bind(body_html)
+        .execute(&self.db_pool)
+        .await
+        .map(|_| ())
+    }
+
+    async fn soft_delete_post(&self, post_id: i64) -> Result<(), sqlx::Error> {
+        query(
+            r#"
+            UPDATE posts
+            SET is_deleted = TRUE
+            WHERE id = $1
+            "#,
+        )
+        .bind(post_id)
+        .execute(&self.db_pool)
+        .await
+        .map(|_| ())
     }
 }
 
@@ -441,7 +563,7 @@ pub async fn show_thread(
 ) -> Response {
     render_thread_detail_page(
         &state,
-        current_user.is_authenticated(),
+        current_user.0.map(|user| user.id),
         &thread_ref,
         pagination_query.requested_page(),
         ReplyFormValues::default(),
@@ -489,7 +611,7 @@ pub async fn post_reply_to_thread(
 
         return render_thread_detail_page(
             &state,
-            true,
+            Some(current_user.id),
             &thread_ref,
             1,
             form_values,
@@ -559,9 +681,106 @@ pub async fn post_reply_to_thread(
     Redirect::to(&format!("/t/{}-{}?page={reply_page}", thread.id, thread.slug)).into_response()
 }
 
+pub async fn get_edit_post(
+    State(state): State<AppState>,
+    CurrentUser(current_user): CurrentUser,
+    Path(post_id): Path<i64>,
+    Query(page_query): Query<PostPageQuery>,
+) -> Response {
+    render_edit_post_page(
+        &state,
+        current_user.id,
+        post_id,
+        page_query.requested_page(),
+        None,
+        EditPostErrors::default(),
+        StatusCode::OK,
+    )
+    .await
+}
+
+pub async fn post_edit_post(
+    State(state): State<AppState>,
+    CurrentUser(current_user): CurrentUser,
+    Path(post_id): Path<i64>,
+    Form(form): Form<EditPostForm>,
+) -> Response {
+    let repository = ThreadRepository::new(state.db_pool.clone());
+    let post = match repository.find_post_for_edit(post_id).await {
+        Ok(Some(post)) => post,
+        Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+        Err(db_error) => {
+            error!(error = %db_error, post_id, "failed to load post for edit");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    if post.user_id != current_user.id {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+
+    if !post_can_be_edited(post.created_at, post.has_later_posts) || post.is_deleted {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+
+    let body = normalize_body(&form.body);
+    let return_page = form.return_page.unwrap_or(1).max(1);
+    let errors = validate_post_body(&body, "Post");
+
+    if !errors.is_empty() {
+        return render_edit_post_page(
+            &state,
+            current_user.id,
+            post_id,
+            return_page,
+            Some(body),
+            errors,
+            StatusCode::UNPROCESSABLE_ENTITY,
+        )
+        .await;
+    }
+
+    let body_html = render_markdown(&body);
+    if let Err(db_error) = repository.update_post(post_id, &body, &body_html).await {
+        error!(error = %db_error, post_id, "failed to update post");
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    }
+
+    Redirect::to(&thread_return_path(post.thread_id, &post.thread_slug, return_page)).into_response()
+}
+
+pub async fn post_delete_post(
+    State(state): State<AppState>,
+    CurrentUser(current_user): CurrentUser,
+    Path(post_id): Path<i64>,
+    Form(form): Form<DeletePostForm>,
+) -> Response {
+    let repository = ThreadRepository::new(state.db_pool.clone());
+    let post = match repository.find_post_for_edit(post_id).await {
+        Ok(Some(post)) => post,
+        Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+        Err(db_error) => {
+            error!(error = %db_error, post_id, "failed to load post for delete");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    if post.user_id != current_user.id || post.is_deleted {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+
+    if let Err(db_error) = repository.soft_delete_post(post_id).await {
+        error!(error = %db_error, post_id, "failed to soft-delete post");
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    }
+
+    let return_page = form.return_page.unwrap_or(1).max(1);
+    Redirect::to(&thread_return_path(post.thread_id, &post.thread_slug, return_page)).into_response()
+}
+
 async fn render_thread_detail_page(
     state: &AppState,
-    is_authenticated: bool,
+    current_user_id: Option<i64>,
     thread_ref: &str,
     requested_page: i64,
     reply_form: ReplyFormValues,
@@ -620,15 +839,18 @@ async fn render_thread_detail_page(
 
     let template = ThreadDetailTemplate::new(
         thread.id,
-        thread.slug,
+        thread.slug.clone(),
         thread.category_slug,
         thread.category_name,
         thread.title,
-        thread_post_item(opening_post),
-        replies.into_iter().map(thread_post_item).collect(),
+        thread_post_item(opening_post, current_user_id, pagination.current_page),
+        replies
+            .into_iter()
+            .map(|row| thread_post_item(row, current_user_id, pagination.current_page))
+            .collect(),
         reply_count,
         pagination,
-        is_authenticated,
+        current_user_id.is_some(),
         thread.is_locked,
         reply_form,
         reply_errors,
@@ -720,6 +942,20 @@ fn validate_reply_form(body: &str, is_locked: bool) -> ReplyErrors {
     errors
 }
 
+fn validate_post_body(body: &str, label: &str) -> EditPostErrors {
+    let mut errors = EditPostErrors::default();
+
+    if body.trim().is_empty() {
+        errors.body = Some(format!("Enter a {label} before saving."));
+    } else if body.chars().count() > THREAD_BODY_MAX_LENGTH {
+        errors.body = Some(format!(
+            "{label} must be at most {THREAD_BODY_MAX_LENGTH} characters."
+        ));
+    }
+
+    errors
+}
+
 async fn generate_unique_thread_slug(
     db_pool: &PgPool,
     category_id: i64,
@@ -787,8 +1023,86 @@ fn parse_thread_ref(thread_ref: &str) -> Option<(i64, String)> {
     Some((id, slug.to_owned()))
 }
 
-fn thread_post_item(row: ThreadPostRow) -> ThreadPostItem {
-    ThreadPostItem::new(row.username, row.created_at, row.edited_at, row.body_html)
+fn thread_post_item(
+    row: ThreadPostRow,
+    current_user_id: Option<i64>,
+    return_page: i64,
+) -> ThreadPostItem {
+    let is_owner = current_user_id == Some(row.user_id);
+    let can_edit = is_owner && !row.is_deleted && post_can_be_edited(row.created_at, row.has_later_posts);
+    let can_delete = is_owner && !row.is_deleted;
+
+    ThreadPostItem::new(
+        row.username,
+        row.created_at,
+        row.edited_at,
+        row.body_html,
+        row.is_deleted,
+        can_edit,
+        can_delete,
+        format!("/posts/{}/edit?page={return_page}", row.id),
+        format!("/posts/{}/delete", row.id),
+        return_page,
+    )
+}
+
+fn post_can_be_edited(created_at: DateTime<Utc>, has_later_posts: bool) -> bool {
+    if !has_later_posts {
+        return true;
+    }
+
+    Utc::now() - created_at <= Duration::minutes(POST_EDIT_WINDOW_MINUTES)
+}
+
+fn thread_return_path(thread_id: i64, thread_slug: &str, return_page: i64) -> String {
+    format!("/t/{thread_id}-{thread_slug}?page={}", return_page.max(1))
+}
+
+async fn render_edit_post_page(
+    state: &AppState,
+    current_user_id: i64,
+    post_id: i64,
+    return_page: i64,
+    override_body: Option<String>,
+    errors: EditPostErrors,
+    status: StatusCode,
+) -> Response {
+    let repository = ThreadRepository::new(state.db_pool.clone());
+    let post = match repository.find_post_for_edit(post_id).await {
+        Ok(Some(post)) => post,
+        Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+        Err(db_error) => {
+            error!(error = %db_error, post_id, "failed to load post edit page");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    if post.user_id != current_user_id {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+
+    if !post_can_be_edited(post.created_at, post.has_later_posts) || post.is_deleted {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+
+    let template = EditPostTemplate::new(
+        thread_return_path(post.thread_id, &post.thread_slug, return_page),
+        format!("/posts/{}/edit", post.post_id),
+        post.thread_title,
+        EditPostFormValues {
+            body: override_body.unwrap_or(post.body_md),
+            return_page,
+        },
+        errors,
+    );
+
+    match template.render() {
+        Ok(html) => (status, Html(html)).into_response(),
+        Err(render_error) => {
+            error!(error = %render_error, "failed to render edit-post template");
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
+    }
 }
 
 fn render_create_thread_page(template: CreateThreadTemplate, status: StatusCode) -> Response {

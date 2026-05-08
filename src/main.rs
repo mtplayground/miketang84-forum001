@@ -56,6 +56,10 @@ async fn main() -> AppResult<()> {
         middleware::from_fn_with_state(app_state.clone(), auth::require_auth);
     let require_auth_layer_for_thread_create =
         middleware::from_fn_with_state(app_state.clone(), auth::require_auth);
+    let require_auth_layer_for_post_edit =
+        middleware::from_fn_with_state(app_state.clone(), auth::require_auth);
+    let require_auth_layer_for_post_delete =
+        middleware::from_fn_with_state(app_state.clone(), auth::require_auth);
 
     let app = Router::new()
         .route("/", get(categories::list_categories))
@@ -89,6 +93,16 @@ async fn main() -> AppResult<()> {
         .route(
             "/t/{thread_ref}",
             get(threads::show_thread).post(threads::post_reply_to_thread),
+        )
+        .route(
+            "/posts/{post_id}/edit",
+            get(threads::get_edit_post)
+                .post(threads::post_edit_post)
+                .route_layer(require_auth_layer_for_post_edit),
+        )
+        .route(
+            "/posts/{post_id}/delete",
+            post(threads::post_delete_post).route_layer(require_auth_layer_for_post_delete),
         )
         .route(
             "/c/{category_slug}/t/{thread_slug}",

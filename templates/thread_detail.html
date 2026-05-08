@@ -25,13 +25,32 @@
             <p class="text-sm font-semibold text-ink-900">{{ opening_post.author_username }}</p>
             <p class="text-sm text-stone-500">{{ opening_post.created_at }}</p>
           </div>
-          {% if let Some(edited_at) = opening_post.edited_at %}
-            <p class="text-xs font-semibold uppercase tracking-[0.18em] text-stone-500">{{ edited_at }}</p>
-          {% endif %}
+          <div class="flex flex-wrap items-center gap-3 sm:justify-end">
+            {% if let Some(edited_at) = opening_post.edited_at %}
+              <p class="text-xs font-semibold uppercase tracking-[0.18em] text-stone-500">{{ edited_at }}</p>
+            {% endif %}
+            {% if opening_post.can_edit %}
+              <a class="text-xs font-semibold uppercase tracking-[0.18em] text-ember-700 underline decoration-ember-300 underline-offset-4" href="{{ opening_post.edit_path }}">
+                Edit
+              </a>
+            {% endif %}
+            {% if opening_post.can_delete %}
+              <form method="post" action="{{ opening_post.delete_path }}">
+                <input type="hidden" name="return_page" value="{{ opening_post.return_page }}">
+                <button class="text-xs font-semibold uppercase tracking-[0.18em] text-rose-700 underline decoration-rose-300 underline-offset-4" type="submit">
+                  Delete
+                </button>
+              </form>
+            {% endif %}
+          </div>
         </div>
-        <div class="prose prose-stone mt-6 max-w-none">
-          {{ opening_post.body_html|safe }}
-        </div>
+        {% if opening_post.is_deleted %}
+          <p class="mt-6 text-sm italic text-stone-500">{{ opening_post.deleted_notice }}</p>
+        {% else %}
+          <div class="prose prose-stone mt-6 max-w-none">
+            {{ opening_post.body_html|safe }}
+          </div>
+        {% endif %}
       </article>
 
       <section>
@@ -55,13 +74,32 @@
                     <p class="text-sm font-semibold text-ink-900">{{ reply.author_username }}</p>
                     <p class="text-sm text-stone-500">{{ reply.created_at }}</p>
                   </div>
-                  {% if let Some(edited_at) = reply.edited_at %}
-                    <p class="text-xs font-semibold uppercase tracking-[0.18em] text-stone-500">{{ edited_at }}</p>
-                  {% endif %}
+                  <div class="flex flex-wrap items-center gap-3 sm:justify-end">
+                    {% if let Some(edited_at) = reply.edited_at %}
+                      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-stone-500">{{ edited_at }}</p>
+                    {% endif %}
+                    {% if reply.can_edit %}
+                      <a class="text-xs font-semibold uppercase tracking-[0.18em] text-ember-700 underline decoration-ember-300 underline-offset-4" href="{{ reply.edit_path }}">
+                        Edit
+                      </a>
+                    {% endif %}
+                    {% if reply.can_delete %}
+                      <form method="post" action="{{ reply.delete_path }}">
+                        <input type="hidden" name="return_page" value="{{ reply.return_page }}">
+                        <button class="text-xs font-semibold uppercase tracking-[0.18em] text-rose-700 underline decoration-rose-300 underline-offset-4" type="submit">
+                          Delete
+                        </button>
+                      </form>
+                    {% endif %}
+                  </div>
                 </div>
-                <div class="prose prose-stone mt-6 max-w-none">
-                  {{ reply.body_html|safe }}
-                </div>
+                {% if reply.is_deleted %}
+                  <p class="mt-6 text-sm italic text-stone-500">{{ reply.deleted_notice }}</p>
+                {% else %}
+                  <div class="prose prose-stone mt-6 max-w-none">
+                    {{ reply.body_html|safe }}
+                  </div>
+                {% endif %}
               </article>
             {% endfor %}
           </div>

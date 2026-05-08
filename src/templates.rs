@@ -215,6 +215,56 @@ impl ThreadDetailTemplate {
 }
 
 #[derive(Default)]
+pub struct EditPostFormValues {
+    pub body: String,
+    pub return_page: i64,
+}
+
+#[derive(Default)]
+pub struct EditPostErrors {
+    pub body: Option<String>,
+    pub general: Option<String>,
+}
+
+impl EditPostErrors {
+    pub fn is_empty(&self) -> bool {
+        self.body.is_none() && self.general.is_none()
+    }
+}
+
+#[derive(Template)]
+#[template(path = "edit_post.html")]
+pub struct EditPostTemplate {
+    pub page_title: &'static str,
+    pub canonical_path: String,
+    pub form_action: String,
+    pub thread_title: String,
+    pub form: EditPostFormValues,
+    pub errors: EditPostErrors,
+    pub is_authenticated: bool,
+}
+
+impl EditPostTemplate {
+    pub fn new(
+        canonical_path: String,
+        form_action: String,
+        thread_title: String,
+        form: EditPostFormValues,
+        errors: EditPostErrors,
+    ) -> Self {
+        Self {
+            page_title: "Edit Post",
+            canonical_path,
+            form_action,
+            thread_title,
+            form,
+            errors,
+            is_authenticated: true,
+        }
+    }
+}
+
+#[derive(Default)]
 pub struct ReplyFormValues {
     pub body: String,
 }
@@ -236,6 +286,13 @@ pub struct ThreadPostItem {
     pub created_at: String,
     pub edited_at: Option<String>,
     pub body_html: String,
+    pub is_deleted: bool,
+    pub deleted_notice: &'static str,
+    pub can_edit: bool,
+    pub can_delete: bool,
+    pub edit_path: String,
+    pub delete_path: String,
+    pub return_page: i64,
 }
 
 impl ThreadPostItem {
@@ -244,14 +301,27 @@ impl ThreadPostItem {
         created_at: chrono::DateTime<chrono::Utc>,
         edited_at: Option<chrono::DateTime<chrono::Utc>>,
         body_html: String,
+        is_deleted: bool,
+        can_edit: bool,
+        can_delete: bool,
+        edit_path: String,
+        delete_path: String,
+        return_page: i64,
     ) -> Self {
         Self {
             author_username,
             created_at: created_at.format("%B %-d, %Y at %-I:%M %p UTC").to_string(),
-            edited_at: edited_at.map(|timestamp| {
+            edited_at: (!is_deleted).then_some(edited_at).flatten().map(|timestamp| {
                 format!("Edited {}", timestamp.format("%B %-d, %Y at %-I:%M %p UTC"))
             }),
             body_html,
+            is_deleted,
+            deleted_notice: "This post has been deleted by its author.",
+            can_edit,
+            can_delete,
+            edit_path,
+            delete_path,
+            return_page,
         }
     }
 }
