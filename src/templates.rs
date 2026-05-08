@@ -120,3 +120,48 @@ impl ProfileTemplate {
         }
     }
 }
+
+#[derive(Default)]
+pub struct ProfileSettingsFormValues {
+    pub bio: String,
+}
+
+#[derive(Default)]
+pub struct ProfileSettingsErrors {
+    pub bio: Option<String>,
+}
+
+impl ProfileSettingsErrors {
+    pub fn is_empty(&self) -> bool {
+        self.bio.is_none()
+    }
+}
+
+#[derive(Template)]
+#[template(path = "settings_profile.html")]
+pub struct ProfileSettingsTemplate {
+    pub page_title: &'static str,
+    pub username: String,
+    pub form: ProfileSettingsFormValues,
+    pub errors: ProfileSettingsErrors,
+    pub is_authenticated: bool,
+    pub saved: bool,
+}
+
+impl ProfileSettingsTemplate {
+    pub fn new(
+        username: String,
+        form: ProfileSettingsFormValues,
+        errors: ProfileSettingsErrors,
+        saved: bool,
+    ) -> Self {
+        Self {
+            page_title: "Edit Profile",
+            username,
+            form,
+            errors,
+            is_authenticated: true,
+            saved,
+        }
+    }
+}

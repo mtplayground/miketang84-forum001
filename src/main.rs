@@ -24,6 +24,7 @@ mod password;
 mod profile;
 mod registration;
 mod session;
+mod settings;
 mod state;
 mod templates;
 
@@ -47,6 +48,8 @@ async fn main() -> AppResult<()> {
         .with_secure(!cfg!(debug_assertions))
         .with_private(session_encryption_key(&config.session_secret)?);
     let require_auth_layer = middleware::from_fn_with_state(app_state.clone(), auth::require_auth);
+    let require_auth_layer_for_settings =
+        middleware::from_fn_with_state(app_state.clone(), auth::require_auth);
 
     let app = Router::new()
         .route("/", get(root))
@@ -58,6 +61,12 @@ async fn main() -> AppResult<()> {
         .route(
             "/register",
             get(registration::get_registration).post(registration::post_registration),
+        )
+        .route(
+            "/settings/profile",
+            get(settings::get_profile_settings)
+                .post(settings::post_profile_settings)
+                .route_layer(require_auth_layer_for_settings),
         )
         .route("/u/{username}", get(profile::show_profile))
         .route("/healthz", get(healthz))
