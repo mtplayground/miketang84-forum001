@@ -1,12 +1,74 @@
+use crate::models::Category;
 use askama::Template;
 
+pub struct CategoryIndexItem {
+    pub slug: String,
+    pub name: String,
+    pub description: String,
+    pub thread_count: i64,
+    pub post_count: i64,
+}
+
+impl CategoryIndexItem {
+    pub fn from_category(category: Category, thread_count: i64, post_count: i64) -> Self {
+        let description = if category.description.trim().is_empty() {
+            "No description yet.".to_owned()
+        } else {
+            category.description
+        };
+
+        Self {
+            slug: category.slug,
+            name: category.name,
+            description,
+            thread_count,
+            post_count,
+        }
+    }
+}
+
 #[derive(Template)]
-#[template(path = "home.html")]
-pub struct HomeTemplate<'a> {
-    pub page_title: &'a str,
-    pub heading: &'a str,
-    pub intro: &'a str,
+#[template(path = "categories_index.html")]
+pub struct CategoryIndexTemplate {
+    pub page_title: &'static str,
+    pub categories: Vec<CategoryIndexItem>,
     pub is_authenticated: bool,
+}
+
+#[derive(Template)]
+#[template(path = "category_detail.html")]
+pub struct CategoryDetailTemplate {
+    pub page_title: String,
+    pub name: String,
+    pub description: String,
+    pub thread_count: i64,
+    pub post_count: i64,
+    pub is_authenticated: bool,
+}
+
+impl CategoryDetailTemplate {
+    pub fn from_category(
+        category: Category,
+        is_authenticated: bool,
+        thread_count: i64,
+        post_count: i64,
+    ) -> Self {
+        let page_title = category.name.clone();
+        let description = if category.description.trim().is_empty() {
+            "No description yet.".to_owned()
+        } else {
+            category.description
+        };
+
+        Self {
+            page_title,
+            name: category.name,
+            description,
+            thread_count,
+            post_count,
+            is_authenticated,
+        }
+    }
 }
 
 #[derive(Default)]
