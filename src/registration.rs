@@ -23,9 +23,21 @@ pub struct RegistrationForm {
     pub confirm: String,
 }
 
-pub async fn get_registration() -> Response {
+pub async fn get_registration(session: Session) -> Response {
+    let is_authenticated = match session.get::<i64>("user_id").await {
+        Ok(user_id) => user_id.is_some(),
+        Err(session_error) => {
+            error!(error = %session_error, "failed to read auth state for registration page");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
     render_registration_page(
-        RegistrationTemplate::new(RegistrationFormValues::default(), RegistrationErrors::default()),
+        RegistrationTemplate::new(
+            RegistrationFormValues::default(),
+            RegistrationErrors::default(),
+            is_authenticated,
+        ),
         StatusCode::OK,
     )
 }
@@ -38,6 +50,13 @@ pub async fn post_registration(
     let username = form.username.trim().to_owned();
     let form_values = RegistrationFormValues {
         username: username.clone(),
+    };
+    let is_authenticated = match session.get::<i64>("user_id").await {
+        Ok(user_id) => user_id.is_some(),
+        Err(session_error) => {
+            error!(error = %session_error, "failed to read auth state during registration");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
     };
 
     let mut errors = validate_registration_form(&form, &username);
@@ -57,7 +76,7 @@ pub async fn post_registration(
 
     if !errors.is_empty() {
         return render_registration_page(
-            RegistrationTemplate::new(form_values, errors),
+            RegistrationTemplate::new(form_values, errors, is_authenticated),
             StatusCode::UNPROCESSABLE_ENTITY,
         );
     }
@@ -80,6 +99,7 @@ pub async fn post_registration(
                         username: Some("That username is already taken.".to_owned()),
                         ..RegistrationErrors::default()
                     },
+                    is_authenticated,
                 ),
                 StatusCode::UNPROCESSABLE_ENTITY,
             );

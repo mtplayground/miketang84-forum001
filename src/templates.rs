@@ -6,6 +6,7 @@ pub struct HomeTemplate<'a> {
     pub page_title: &'a str,
     pub heading: &'a str,
     pub intro: &'a str,
+    pub is_authenticated: bool,
 }
 
 #[derive(Default)]
@@ -32,14 +33,54 @@ pub struct RegistrationTemplate {
     pub page_title: &'static str,
     pub form: RegistrationFormValues,
     pub errors: RegistrationErrors,
+    pub is_authenticated: bool,
 }
 
 impl RegistrationTemplate {
-    pub fn new(form: RegistrationFormValues, errors: RegistrationErrors) -> Self {
+    pub fn new(form: RegistrationFormValues, errors: RegistrationErrors, is_authenticated: bool) -> Self {
         Self {
             page_title: "Register",
             form,
             errors,
+            is_authenticated,
+        }
+    }
+}
+
+#[derive(Default)]
+pub struct LoginFormValues {
+    pub username: String,
+}
+
+#[derive(Default)]
+pub struct LoginErrors {
+    pub username: Option<String>,
+    pub password: Option<String>,
+    pub general: Option<String>,
+}
+
+impl LoginErrors {
+    pub fn is_empty(&self) -> bool {
+        self.username.is_none() && self.password.is_none() && self.general.is_none()
+    }
+}
+
+#[derive(Template)]
+#[template(path = "login.html")]
+pub struct LoginTemplate {
+    pub page_title: &'static str,
+    pub form: LoginFormValues,
+    pub errors: LoginErrors,
+    pub is_authenticated: bool,
+}
+
+impl LoginTemplate {
+    pub fn new(form: LoginFormValues, errors: LoginErrors, is_authenticated: bool) -> Self {
+        Self {
+            page_title: "Login",
+            form,
+            errors,
+            is_authenticated,
         }
     }
 }
