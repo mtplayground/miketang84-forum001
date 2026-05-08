@@ -1,0 +1,155 @@
+Architecture plan for `miketang84-forum001`
+
+Project shape
+- Plain Rust web app using Axum, SQLx, Askama, tower-sessions, Tailwind, and PostgreSQL.
+- Single binary crate with server-rendered HTML pages and static assets.
+- Keep the initial issue scope oriented around a monolith with strong module boundaries so later extraction is optional rather than required.
+
+Proposed layout
+```text
+.
+├── Cargo.toml
+├── Dockerfile
+├── migrations/
+├── src/
+│   ├── main.rs
+│   ├── app.rs                 # router/bootstrap
+│   ├── config.rs              # env loading and typed settings
+│   ├── state.rs               # AppState shared across handlers
+│   ├── error.rs               # AppError, error pages, flash helpers
+│   ├── web/
+│   │   ├── mod.rs
+│   │   ├── middleware/
+│   │   │   ├── auth.rs
+│   │   │   └── admin.rs
+│   │   ├── extractors/
+│   │   │   └── current_user.rs
+│   │   ├── flash.rs
+│   │   ├── pagination.rs
+│   │   └── routes/
+│   │       ├── auth.rs
+│   │       ├── categories.rs
+│   │       ├── profile.rs
+│   │       ├── threads.rs
+│   │       ├── search.rs
+│   │       └── admin.rs
+│   ├── db/
+│   │   ├── mod.rs
+│   │   ├── pool.rs
+│   │   ├── migrations.rs
+│   │   └── models/
+│   │       ├── user.rs
+│   │       ├── category.rs
+│   │       ├── thread.rs
+│   │       └── post.rs
+│   ├── services/
+│   │   ├── mod.rs
+│   │   ├── auth.rs           # password hashing and verification
+│   │   ├── markdown.rs
+│   │   └── search.rs
+│   ├── templates/
+│   │   ├── base.html
+│   │   ├── components/
+│   │   ├── auth/
+│   │   ├── profile/
+│   │   ├── categories/
+│   │   ├── threads/
+│   │   ├── admin/
+│   │   ├── search/
+│   │   └── error/
+│   └── domain/
+│       ├── mod.rs
+│       ├── roles.rs
+│       └── ids.rs
+├── static/
+│   ├── app.css
+│   └── app.js
+├── assets/
+│   └── tailwind.css
+├── tailwind.config.js
+└── tests/
+    ├── common/
+    │   ├── mod.rs
+    │   ├── app.rs
+    │   ├── db.rs
+    │   └── fixtures.rs
+    ├── auth_flow.rs
+    └── forum_flow.rs
+```
+
+Shared types and conventions
+- `AppState`: contains typed `Config`, `PgPool`, session store configuration, and shared services.
+- `AppError`: one error enum implementing `IntoResponse`; route handlers return `Result<impl IntoResponse, AppError>`.
+- `CurrentUser`: extractor that yields authenticated user context, including `user_id`, username, and role.
+- `Role`: enum for `User` and `Admin`; avoid stringly typed authorization checks in handlers.
+- `Page<T>` or `PaginationParams`: shared pagination DTOs for thread lists, posts, and search results.
+- Database rows and web view models stay separate where templates need derived display fields.
+- Use repository-style functions in `db::models::*` rather than putting SQL directly in handlers.
+
+Key design decisions
+- Use `sqlx::query!` / `query_as!` with offline metadata once the schema stabilizes; this catches schema drift early.
+- Run startup in one place: load config, create pool, run pending migrations, build router, serve.
+- Keep auth/session concerns in middleware and extractors, not duplicated in handlers.
+- Use server-rendered Askama templates everywhere to keep complexity low and match issue scope.
+- Support soft deletion for posts with nullable `deleted_at` / `deleted_by`; render tombstones instead of removing rows.
+- Model thread state (`pinned`, `locked`) and user state (`is_banned`, `role`) in the database so middleware and handlers share the same source of truth.
+- Make flash messages cookie/session-backed and render them in the base template, which aligns with issue #36.
+- Build search on PostgreSQL full-text search against denormalized indexed columns; avoid adding external search infrastructure.
+
+Issue dependency order
+- Foundation:
+  - #1 Cargo project with Axum skeleton
+  - #2 environment configuration loader
+  - #3 PostgreSQL pool
+  - #4 SQLx migrations
+  - #5 Askama base layout
+  - #6 Tailwind and static assets
+  - #7 Dockerfile
+- Authentication base:
+  - #8 user table
+  - #9 password hashing
+  - #10 session store
+  - #11 registration
+  - #12 login/logout
+  - #13 auth guard and current-user extractor
+- User-facing account features:
+  - #14 public profile
+  - #15 edit profile
+  - #16 change password
+- Forum taxonomy and content:
+  - #17 category table/model
+  - #18 category pages
+  - #19 thread/post tables and models
+  - #20 markdown and sanitization
+  - #21 create thread
+  - #22 thread list with pagination
+  - #23 thread detail with paginated posts
+  - #24 reply to thread
+  - #25 edit and soft-delete own post
+- Moderation/admin:
+  - #26 admin role guard
+  - #27 admin category management
+  - #28 pin and lock threads
+  - #29 admin post deletion
+  - #30 user ban
+- Discovery and quality:
+  - #31 Postgres FTS index
+  - #32 search page and handler
+  - #33 integration test harness
+  - #34 auth integration tests
+  - #35 forum integration tests
+  - #36 global error pages and flash messages
+  - #37 production deployment checklist
+
+Cross-issue implementation notes
+- #10 depends on #8 because sessions need a stable user identity model.
+- #13 should define the `CurrentUser` contract that later account, thread, and admin handlers all reuse.
+- #19 should include foreign keys and useful indexes needed by #22, #23, #28, #29, #30, and #31 so migrations do not churn later.
+- #20 should ship before thread/post creation features are considered complete, because content display rules affect storage and rendering choices.
+- #26 should be introduced before any admin UI or mutating admin handler is added.
+- #31 should be designed with #19 in mind, likely indexing thread title plus post body content through a generated tsvector or trigger-maintained column.
+- #33 should establish isolated test database setup and app bootstrap helpers so #34 and #35 are mostly scenario coverage, not infrastructure work.
+
+First-session objective
+- This session should only establish repository hygiene and a durable architectural baseline.
+- The next implementation session should start with issue #1 and create the crate structure so later issues map cleanly onto the plan above.
