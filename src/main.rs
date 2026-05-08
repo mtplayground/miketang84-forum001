@@ -18,6 +18,7 @@ mod auth;
 mod categories;
 mod config;
 mod login;
+mod markdown;
 mod models;
 mod password;
 mod posts;
