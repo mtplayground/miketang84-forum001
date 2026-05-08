@@ -18,7 +18,6 @@ use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, Env
 mod config;
 mod models;
 mod password;
-mod registration;
 mod session;
 mod state;
 mod templates;
@@ -40,12 +39,10 @@ async fn main() -> AppResult<()> {
     let session_store = PostgresStore::new(app_state.db_pool.clone());
     let session_layer = SessionManagerLayer::new(session_store)
         .with_same_site(SameSite::Lax)
-        .with_secure(!cfg!(debug_assertions))
         .with_private(session_encryption_key(&config.session_secret)?);
 
     let app = Router::new()
         .route("/", get(root))
-        .route("/register", get(registration::get_registration).post(registration::post_registration))
         .route("/healthz", get(healthz))
         .nest_service("/static", ServeDir::new("static"))
         .with_state(app_state)

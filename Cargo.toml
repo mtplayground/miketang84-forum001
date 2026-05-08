@@ -6,10 +6,9 @@ edition = "2021"
 [dependencies]
 argon2 = "0.5"
 askama = "0.12"
-axum = { version = "0.8", features = ["macros"] }
+axum = "0.7"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 dotenvy = "0.15"
-serde = { version = "1", features = ["derive"] }
 sqlx = { version = "0.8", features = ["chrono", "postgres", "runtime-tokio-rustls"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "net"] }
 tower = "0.5"
