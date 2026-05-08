@@ -1,9 +1,7 @@
-use askama::Template;
 use axum::{
     extract::State,
     http::StatusCode,
     middleware,
-    response::Html,
     routing::{get, post},
     Router,
 };
@@ -32,7 +30,6 @@ mod templates;
 use config::Config;
 use session::session_encryption_key;
 use state::AppState;
-use templates::HomeTemplate;
 
 use std::error::Error;
 
@@ -55,7 +52,7 @@ async fn main() -> AppResult<()> {
         middleware::from_fn_with_state(app_state.clone(), auth::require_auth);
 
     let app = Router::new()
-        .route("/", get(root))
+        .route("/", get(categories::list_categories))
         .route("/login", get(login::get_login).post(login::post_login))
         .route(
             "/logout",
@@ -77,6 +74,7 @@ async fn main() -> AppResult<()> {
                 .post(settings::post_password_settings)
                 .route_layer(require_auth_layer_for_password),
         )
+        .route("/c/{slug}", get(categories::show_category))
         .route("/u/{username}", get(profile::show_profile))
         .route("/healthz", get(healthz))
         .nest_service("/static", ServeDir::new("static"))
@@ -112,21 +110,6 @@ fn init_tracing(rust_log: &str) -> AppResult<()> {
         .try_init()?;
 
     Ok(())
-}
-
-async fn root(current_user: auth::MaybeCurrentUser) -> Result<Html<String>, StatusCode> {
-    HomeTemplate {
-        page_title: "Home",
-        heading: "Forum foundation is online.",
-        intro: "This starter page is rendered with Askama and inherits the shared base layout that future forum pages will extend.",
-        is_authenticated: current_user.is_authenticated(),
-    }
-    .render()
-    .map(Html)
-    .map_err(|error| {
-        error!(error = %error, "failed to render home template");
-        StatusCode::INTERNAL_SERVER_ERROR
-    })
 }
 
 async fn healthz(State(state): State<AppState>) -> Result<&'static str, StatusCode> {

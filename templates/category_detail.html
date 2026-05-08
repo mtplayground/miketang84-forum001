@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+  <section class="rounded-3xl border border-stone-700/10 bg-white/85 p-10 shadow-panel backdrop-blur sm:p-12">
+    <a class="text-sm font-semibold uppercase tracking-[0.24em] text-ember-600 underline decoration-ember-300 underline-offset-4" href="/">
+      Back to Categories
+    </a>
+    <h1 class="mt-4 text-4xl leading-none text-ink-900 sm:text-5xl">{{ name }}</h1>
+    <p class="mt-6 max-w-3xl text-lg leading-8 text-stone-700">{{ description }}</p>
+
+    <dl class="mt-10 grid gap-4 sm:grid-cols-2">
+      <div class="rounded-3xl bg-stone-50 px-6 py-6">
+        <dt class="text-xs font-semibold uppercase tracking-[0.24em] text-stone-500">Threads</dt>
+        <dd class="mt-3 text-3xl font-semibold text-ink-900">{{ thread_count }}</dd>
+      </div>
+      <div class="rounded-3xl bg-stone-50 px-6 py-6">
+        <dt class="text-xs font-semibold uppercase tracking-[0.24em] text-stone-500">Posts</dt>
+        <dd class="mt-3 text-3xl font-semibold text-ink-900">{{ post_count }}</dd>
+      </div>
+    </dl>
+
+    <div class="mt-10 rounded-3xl border border-dashed border-stone-300 bg-stone-50/80 px-6 py-10 text-center text-stone-600">
+      Thread listings for <span class="font-semibold text-ink-900">{{ name }}</span> land in the next forum task.
+    </div>
+  </section>
+{% endblock %}
