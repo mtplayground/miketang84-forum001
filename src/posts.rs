@@ -69,7 +69,7 @@ impl PostRepository {
         query(
             r#"
             UPDATE posts
-            SET is_deleted = TRUE, edited_at = NOW()
+            SET is_deleted = TRUE
             WHERE id = $1
             "#,
         )
