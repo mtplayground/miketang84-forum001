@@ -643,3 +643,47 @@ impl PasswordSettingsTemplate {
         }
     }
 }
+
+pub struct SearchResultItem {
+    pub kind_label: &'static str,
+    pub title: String,
+    pub snippet_html: String,
+    pub destination: String,
+    pub destination_label: &'static str,
+    pub context: String,
+}
+
+#[derive(Template)]
+#[template(path = "search.html")]
+pub struct SearchTemplate {
+    pub page_title: &'static str,
+    pub query: String,
+    pub query_encoded: String,
+    pub results: Vec<SearchResultItem>,
+    pub pagination: Pagination,
+    pub error: Option<String>,
+    pub has_searched: bool,
+    pub is_authenticated: bool,
+}
+
+impl SearchTemplate {
+    pub fn new(
+        query: String,
+        results: Vec<SearchResultItem>,
+        pagination: Pagination,
+        error: Option<String>,
+        has_searched: bool,
+        is_authenticated: bool,
+    ) -> Self {
+        Self {
+            page_title: "Search",
+            query_encoded: urlencoding::encode(&query).into_owned(),
+            query,
+            results,
+            pagination,
+            error,
+            has_searched,
+            is_authenticated,
+        }
+    }
+}

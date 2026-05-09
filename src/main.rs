@@ -26,6 +26,7 @@ mod password;
 mod posts;
 mod profile;
 mod registration;
+mod search;
 mod session;
 mod settings;
 mod state;
@@ -76,6 +77,7 @@ async fn main() -> AppResult<()> {
             "/register",
             get(registration::get_registration).post(registration::post_registration),
         )
+        .route("/search", get(search::show_search))
         .route(
             "/settings/profile",
             get(settings::get_profile_settings)

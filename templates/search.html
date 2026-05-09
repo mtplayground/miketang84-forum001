@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+  <section class="rounded-3xl border border-stone-700/10 bg-white/85 p-10 shadow-panel backdrop-blur sm:p-12">
+    <p class="text-xs font-semibold uppercase tracking-[0.28em] text-ember-500">Forum Search</p>
+    <h1 class="mt-4 text-4xl leading-none text-ink-900 sm:text-6xl">Search threads and posts</h1>
+    <p class="mt-6 max-w-2xl text-lg leading-8 text-stone-700">
+      Search across thread titles and post bodies with PostgreSQL full-text search.
+    </p>
+
+    <form class="mt-8 flex flex-col gap-3 sm:flex-row" method="get" action="/search">
+      <label class="sr-only" for="search-query">Search query</label>
+      <input
+        id="search-query"
+        name="q"
+        type="search"
+        value="{{ query }}"
+        placeholder="rust markdown pagination"
+        class="w-full rounded-full border border-stone-300 bg-white px-5 py-3 text-base text-ink-900 shadow-sm outline-none transition focus:border-ember-500 focus:ring-2 focus:ring-ember-200"
+      >
+      <button class="inline-flex items-center justify-center rounded-full bg-ink-900 px-6 py-3 text-sm font-semibold text-parchment-50 transition hover:bg-stone-800" type="submit">
+        Search
+      </button>
+    </form>
+
+    {% if let Some(error) = error %}
+      <div class="mt-6 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+        {{ error }}
+      </div>
+    {% endif %}
+
+    {% if !has_searched %}
+      <div class="mt-10 rounded-3xl border border-dashed border-stone-300 bg-stone-50/80 px-6 py-10 text-center text-stone-600">
+        Enter a query to search the forum.
+      </div>
+    {% else %}
+      <div class="mt-10 flex items-center justify-between gap-4">
+        <h2 class="text-2xl font-semibold text-ink-900">Results</h2>
+        <p class="text-sm text-stone-500">
+          Page {{ pagination.current_page }} of {{ pagination.total_pages }}
+        </p>
+      </div>
+
+      {% if results.is_empty() %}
+        <div class="mt-6 rounded-3xl border border-dashed border-stone-300 bg-stone-50/80 px-6 py-10 text-center text-stone-600">
+          No results matched <span class="font-semibold text-ink-900">{{ query }}</span>.
+        </div>
+      {% else %}
+        <div class="mt-6 space-y-4">
+          {% for result in results %}
+            <article class="rounded-3xl border border-stone-200 bg-white px-6 py-6 shadow-sm">
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p class="text-xs font-semibold uppercase tracking-[0.24em] text-stone-500">{{ result.kind_label }}</p>
+                  <h3 class="mt-2 text-2xl font-semibold text-ink-900">{{ result.title }}</h3>
+                  <p class="mt-2 text-sm text-stone-500">{{ result.context }}</p>
+                </div>
+                <a class="inline-flex items-center justify-center rounded-full border border-stone-300 px-4 py-2 text-sm font-semibold text-stone-700 transition hover:border-stone-400 hover:bg-stone-50" href="{{ result.destination }}">
+                  {{ result.destination_label }}
+                </a>
+              </div>
+              <div class="prose prose-stone mt-6 max-w-none text-stone-700">
+                {{ result.snippet_html|safe }}
+              </div>
+            </article>
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      <div class="mt-8 flex items-center justify-between gap-4">
+        <div>
+          {% if let Some(previous_page) = pagination.previous_page %}
+            <a class="inline-flex items-center justify-center rounded-full border border-stone-300 px-5 py-2 text-sm font-semibold text-stone-700 transition hover:border-stone-400 hover:bg-stone-50" href="/search?q={{ query_encoded }}&page={{ previous_page }}">
+              Previous
+            </a>
+          {% endif %}
+        </div>
+        <div class="text-sm text-stone-500">
+          {{ pagination.total_items }} total matches
+        </div>
+        <div>
+          {% if let Some(next_page) = pagination.next_page %}
+            <a class="inline-flex items-center justify-center rounded-full border border-stone-300 px-5 py-2 text-sm font-semibold text-stone-700 transition hover:border-stone-400 hover:bg-stone-50" href="/search?q={{ query_encoded }}&page={{ next_page }}">
+              Next
+            </a>
+          {% endif %}
+        </div>
+      </div>
+    {% endif %}
+  </section>
+{% endblock %}
