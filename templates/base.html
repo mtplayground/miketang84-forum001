@@ -10,8 +10,20 @@
   <body class="font-serif">
     <div class="flex min-h-screen flex-col">
       <header class="border-b border-white/15 bg-ink-900 px-6 py-5 text-parchment-50">
-        <div class="mx-auto flex w-full max-w-4xl items-center justify-between gap-6">
-          <strong>miketang84-forum001</strong>
+        <div class="mx-auto flex w-full max-w-4xl flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div class="flex items-center justify-between gap-6">
+            <strong>miketang84-forum001</strong>
+            <form class="hidden sm:block" method="get" action="/search">
+              <label class="sr-only" for="site-search">Search</label>
+              <input
+                id="site-search"
+                name="q"
+                type="search"
+                placeholder="Search threads and posts"
+                class="w-64 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm text-parchment-50 placeholder:text-parchment-50/60 outline-none transition focus:border-white/40 focus:bg-white/15"
+              >
+            </form>
+          </div>
           <nav class="flex items-center gap-3 text-sm font-semibold">
             {% if is_authenticated %}
               <a class="rounded-full border border-white/20 px-4 py-2 text-parchment-50 transition hover:border-white/40 hover:bg-white/10" href="/settings/profile">
@@ -32,6 +44,16 @@
             {% endif %}
           </nav>
         </div>
+        <form class="mx-auto mt-3 w-full max-w-4xl sm:hidden" method="get" action="/search">
+          <label class="sr-only" for="site-search-mobile">Search</label>
+          <input
+            id="site-search-mobile"
+            name="q"
+            type="search"
+            placeholder="Search threads and posts"
+            class="w-full rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm text-parchment-50 placeholder:text-parchment-50/60 outline-none transition focus:border-white/40 focus:bg-white/15"
+          >
+        </form>
       </header>
       <main class="mx-auto w-full max-w-4xl flex-1 px-6 py-16 sm:px-8 sm:py-20">
         {% block content %}{% endblock %}

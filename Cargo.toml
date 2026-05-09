@@ -10,6 +10,7 @@ askama = "0.12"
 axum = { version = "0.8", features = ["macros"] }
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 dotenvy = "0.15"
+html-escape = "0.2"
 pulldown-cmark = "0.12"
 serde = { version = "1", features = ["derive"] }
 sqlx = { version = "0.8", features = ["chrono", "postgres", "runtime-tokio-rustls"] }
@@ -20,3 +21,4 @@ tower-sessions = { version = "0.14", default-features = false, features = ["axum
 tower-sessions-sqlx-store = { version = "0.15", features = ["postgres"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
+urlencoding = "2"
