@@ -216,7 +216,7 @@ async fn update_bio(state: &AppState, user_id: i64, bio: &str) -> Result<User, s
         UPDATE users
         SET bio = $1, updated_at = NOW()
         WHERE id = $2
-        RETURNING id, username, password_hash, role, bio, created_at, updated_at
+        RETURNING id, username, password_hash, role, is_banned, bio, created_at, updated_at
         "#,
     )
     .bind(bio)
