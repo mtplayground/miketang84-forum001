@@ -10,6 +10,7 @@ use sqlx::{query, query_as, PgPool};
 use tracing::error;
 
 use crate::{
+    auth::CurrentUser,
     categories::CategoryRepository,
     models::Category,
     state::AppState,
@@ -44,6 +45,7 @@ pub struct ThreadReturnForm {
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/", get(admin_home))
+        .route("/users/{user_id}/ban", post(toggle_user_ban))
         .route("/categories", get(list_categories).post(create_category))
         .route(
             "/categories/{category_id}/edit",
@@ -505,6 +507,62 @@ pub async fn delete_post(
     let destination = form
         .return_to
         .unwrap_or_else(|| format!("/t/{}-{}", post.thread_id, post.thread_slug));
+    Redirect::to(&destination).into_response()
+}
+
+#[derive(sqlx::FromRow)]
+struct AdminUserBanRow {
+    id: i64,
+    username: String,
+}
+
+pub async fn toggle_user_ban(
+    State(state): State<AppState>,
+    CurrentUser(current_admin): CurrentUser,
+    Path(user_id): Path<i64>,
+    Form(form): Form<ThreadReturnForm>,
+) -> Response {
+    let target_user = match query_as::<_, AdminUserBanRow>(
+        r#"
+        SELECT id, username
+        FROM users
+        WHERE id = $1
+        "#,
+    )
+    .bind(user_id)
+    .fetch_optional(&state.db_pool)
+    .await
+    {
+        Ok(Some(user)) => user,
+        Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+        Err(db_error) => {
+            error!(error = %db_error, user_id, "failed to load user for ban toggle");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    if target_user.id == current_admin.id {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+
+    if let Err(db_error) = query(
+        r#"
+        UPDATE users
+        SET is_banned = NOT is_banned, updated_at = NOW()
+        WHERE id = $1
+        "#,
+    )
+    .bind(user_id)
+    .execute(&state.db_pool)
+    .await
+    {
+        error!(error = %db_error, user_id, "failed to toggle user ban");
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    }
+
+    let destination = form
+        .return_to
+        .unwrap_or_else(|| format!("/u/{}", target_user.username));
     Redirect::to(&destination).into_response()
 }
 

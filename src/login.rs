@@ -84,6 +84,20 @@ pub async fn post_login(
         }
     };
 
+    if user.is_banned {
+        return render_login_page(
+            LoginTemplate::new(
+                form_values,
+                LoginErrors {
+                    general: Some("This account has been banned.".to_owned()),
+                    ..LoginErrors::default()
+                },
+                is_authenticated,
+            ),
+            StatusCode::FORBIDDEN,
+        );
+    }
+
     let is_valid_password = match verify_password(&form.password, &user.password_hash) {
         Ok(result) => result,
         Err(hash_error) => {
@@ -134,7 +148,7 @@ async fn find_user_by_username(
 ) -> Result<Option<User>, sqlx::Error> {
     query_as::<_, User>(
         r#"
-        SELECT id, username, password_hash, role, bio, created_at, updated_at
+        SELECT id, username, password_hash, role, is_banned, bio, created_at, updated_at
         FROM users
         WHERE username = $1
         "#,

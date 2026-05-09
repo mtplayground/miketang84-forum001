@@ -527,11 +527,21 @@ pub struct ProfileTemplate {
     pub joined_on: String,
     pub bio: String,
     pub post_count: i64,
+    pub is_banned: bool,
+    pub viewer_is_admin: bool,
+    pub viewer_can_ban: bool,
+    pub admin_ban_path: String,
     pub is_authenticated: bool,
 }
 
 impl ProfileTemplate {
-    pub fn from_user(user: crate::models::User, is_authenticated: bool, post_count: i64) -> Self {
+    pub fn from_user(
+        user: crate::models::User,
+        is_authenticated: bool,
+        viewer_user_id: Option<i64>,
+        viewer_is_admin: bool,
+        post_count: i64,
+    ) -> Self {
         let page_title = format!("{}'s profile", user.username);
         let joined_on = user.created_at.format("%B %-d, %Y").to_string();
         let bio = if user.bio.trim().is_empty() {
@@ -542,10 +552,14 @@ impl ProfileTemplate {
 
         Self {
             page_title,
+            admin_ban_path: format!("/admin/users/{}/ban", user.id),
             username: user.username,
             joined_on,
             bio,
             post_count,
+            is_banned: user.is_banned,
+            viewer_is_admin,
+            viewer_can_ban: viewer_is_admin && viewer_user_id != Some(user.id),
             is_authenticated,
         }
     }

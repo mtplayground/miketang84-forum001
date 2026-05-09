@@ -24,7 +24,13 @@ pub async fn show_profile(
     };
 
     render_profile_page(
-        ProfileTemplate::from_user(profile_user, current_user.is_authenticated(), 0),
+        ProfileTemplate::from_user(
+            profile_user,
+            current_user.is_authenticated(),
+            current_user.0.as_ref().map(|user| user.id),
+            current_user.is_admin(),
+            0,
+        ),
         StatusCode::OK,
     )
 }
@@ -35,7 +41,7 @@ async fn find_user_by_username(
 ) -> Result<Option<User>, sqlx::Error> {
     query_as::<_, User>(
         r#"
-        SELECT id, username, password_hash, role, bio, created_at, updated_at
+        SELECT id, username, password_hash, role, is_banned, bio, created_at, updated_at
         FROM users
         WHERE username = $1
         "#,

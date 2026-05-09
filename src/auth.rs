@@ -144,9 +144,9 @@ async fn load_current_user(
         return Ok(None);
     };
 
-    query_as::<_, User>(
+    let maybe_user = query_as::<_, User>(
         r#"
-        SELECT id, username, password_hash, role, bio, created_at, updated_at
+        SELECT id, username, password_hash, role, is_banned, bio, created_at, updated_at
         FROM users
         WHERE id = $1
         "#,
@@ -154,7 +154,16 @@ async fn load_current_user(
     .bind(user_id)
     .fetch_optional(&state.db_pool)
     .await
-    .map_err(AuthLoadError::Database)
+    .map_err(AuthLoadError::Database)?;
+
+    match maybe_user {
+        Some(user) if user.is_banned => {
+            session.flush().await.map_err(AuthLoadError::Session)?;
+            Ok(None)
+        }
+        Some(user) => Ok(Some(user)),
+        None => Ok(None),
+    }
 }
 
 fn internal_server_error(error: impl std::fmt::Display) -> Response {

@@ -16,6 +16,7 @@ pub struct User {
     pub username: String,
     pub password_hash: String,
     pub role: UserRole,
+    pub is_banned: bool,
     pub bio: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,

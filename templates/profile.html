@@ -11,6 +11,23 @@
         <p class="mt-4 text-sm font-semibold uppercase tracking-[0.24em] text-stone-500">
           Joined {{ joined_on }}
         </p>
+        {% if viewer_is_admin %}
+          <div class="mt-4 flex flex-wrap items-center gap-3">
+            {% if is_banned %}
+              <span class="rounded-full bg-rose-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-rose-800">
+                Banned
+              </span>
+            {% endif %}
+            {% if viewer_can_ban %}
+              <form method="post" action="{{ admin_ban_path }}">
+                <input type="hidden" name="return_to" value="/u/{{ username }}">
+                <button class="rounded-full border border-stone-300 px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-stone-700 transition hover:bg-stone-50" type="submit">
+                  {% if is_banned %}Unban User{% else %}Ban User{% endif %}
+                </button>
+              </form>
+            {% endif %}
+          </div>
+        {% endif %}
       </div>
       <div class="rounded-2xl border border-stone-200 bg-stone-50 px-6 py-5 text-center">
         <p class="text-xs font-semibold uppercase tracking-[0.24em] text-stone-500">Posts</p>

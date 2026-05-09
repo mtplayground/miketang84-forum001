@@ -147,7 +147,7 @@ async fn create_user(
         r#"
         INSERT INTO users (username, password_hash)
         VALUES ($1, $2)
-        RETURNING id, username, password_hash, role, bio, created_at, updated_at
+        RETURNING id, username, password_hash, role, is_banned, bio, created_at, updated_at
         "#,
     )
     .bind(username)
