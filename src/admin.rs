@@ -51,6 +51,7 @@ pub fn router() -> Router<AppState> {
         )
         .route("/categories/{category_id}/position", post(reorder_category))
         .route("/categories/{category_id}/delete", post(delete_category))
+        .route("/posts/{post_id}/delete", post(delete_post))
         .route("/threads/{thread_id}/pin", post(toggle_thread_pin))
         .route("/threads/{thread_id}/lock", post(toggle_thread_lock))
         .fallback(admin_not_found)
@@ -472,6 +473,39 @@ pub async fn toggle_thread_lock(
     Form(form): Form<ThreadReturnForm>,
 ) -> Response {
     toggle_thread_flag(&state.db_pool, thread_id, "is_locked", form.return_to).await
+}
+
+pub async fn delete_post(
+    State(state): State<AppState>,
+    Path(post_id): Path<i64>,
+    Form(form): Form<ThreadReturnForm>,
+) -> Response {
+    let repository = ThreadRepository::new(state.db_pool.clone());
+    let post = match repository.find_post_context(post_id).await {
+        Ok(Some(post)) => post,
+        Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+        Err(db_error) => {
+            error!(error = %db_error, post_id, "failed to load post for admin delete");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    if post.is_deleted {
+        let destination = form
+            .return_to
+            .unwrap_or_else(|| format!("/t/{}-{}", post.thread_id, post.thread_slug));
+        return Redirect::to(&destination).into_response();
+    }
+
+    if let Err(db_error) = repository.soft_delete_post(post_id).await {
+        error!(error = %db_error, post_id, "failed to soft-delete post as admin");
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    }
+
+    let destination = form
+        .return_to
+        .unwrap_or_else(|| format!("/t/{}-{}", post.thread_id, post.thread_slug));
+    Redirect::to(&destination).into_response()
 }
 
 async fn load_admin_category_rows(db_pool: &PgPool) -> Result<Vec<Category>, sqlx::Error> {

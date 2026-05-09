@@ -98,16 +98,16 @@ struct ThreadPostRow {
 }
 
 #[derive(sqlx::FromRow)]
-struct EditPostRow {
-    post_id: i64,
-    user_id: i64,
-    body_md: String,
-    created_at: DateTime<Utc>,
-    is_deleted: bool,
-    has_later_posts: bool,
-    thread_id: i64,
-    thread_slug: String,
-    thread_title: String,
+pub(crate) struct PostContextRow {
+    pub(crate) post_id: i64,
+    pub(crate) user_id: i64,
+    pub(crate) body_md: String,
+    pub(crate) created_at: DateTime<Utc>,
+    pub(crate) is_deleted: bool,
+    pub(crate) has_later_posts: bool,
+    pub(crate) thread_id: i64,
+    pub(crate) thread_slug: String,
+    pub(crate) thread_title: String,
 }
 
 #[allow(dead_code)]
@@ -357,8 +357,11 @@ impl ThreadRepository {
         .await
     }
 
-    async fn find_post_for_edit(&self, post_id: i64) -> Result<Option<EditPostRow>, sqlx::Error> {
-        query_as::<_, EditPostRow>(
+    pub(crate) async fn find_post_context(
+        &self,
+        post_id: i64,
+    ) -> Result<Option<PostContextRow>, sqlx::Error> {
+        query_as::<_, PostContextRow>(
             r#"
             SELECT
                 p.id AS post_id,
@@ -406,7 +409,7 @@ impl ThreadRepository {
         .map(|_| ())
     }
 
-    async fn soft_delete_post(&self, post_id: i64) -> Result<(), sqlx::Error> {
+    pub(crate) async fn soft_delete_post(&self, post_id: i64) -> Result<(), sqlx::Error> {
         query(
             r#"
             UPDATE posts
@@ -710,7 +713,7 @@ pub async fn post_edit_post(
     Form(form): Form<EditPostForm>,
 ) -> Response {
     let repository = ThreadRepository::new(state.db_pool.clone());
-    let post = match repository.find_post_for_edit(post_id).await {
+    let post = match repository.find_post_context(post_id).await {
         Ok(Some(post)) => post,
         Ok(None) => return StatusCode::NOT_FOUND.into_response(),
         Err(db_error) => {
@@ -760,7 +763,7 @@ pub async fn post_delete_post(
     Form(form): Form<DeletePostForm>,
 ) -> Response {
     let repository = ThreadRepository::new(state.db_pool.clone());
-    let post = match repository.find_post_for_edit(post_id).await {
+    let post = match repository.find_post_context(post_id).await {
         Ok(Some(post)) => post,
         Ok(None) => return StatusCode::NOT_FOUND.into_response(),
         Err(db_error) => {
@@ -849,10 +852,10 @@ async fn render_thread_detail_page(
         thread.category_name,
         thread.title,
         thread.is_pinned,
-        thread_post_item(opening_post, current_user_id, pagination.current_page),
+        thread_post_item(opening_post, current_user_id, is_admin, pagination.current_page),
         replies
             .into_iter()
-            .map(|row| thread_post_item(row, current_user_id, pagination.current_page))
+            .map(|row| thread_post_item(row, current_user_id, is_admin, pagination.current_page))
             .collect(),
         reply_count,
         pagination,
@@ -1032,12 +1035,14 @@ fn parse_thread_ref(thread_ref: &str) -> Option<(i64, String)> {
 
 fn thread_post_item(
     row: ThreadPostRow,
-    current_user_id: Option<i64>,
-    return_page: i64,
+        current_user_id: Option<i64>,
+        is_admin: bool,
+        return_page: i64,
 ) -> ThreadPostItem {
     let is_owner = current_user_id == Some(row.user_id);
     let can_edit = is_owner && !row.is_deleted && post_can_be_edited(row.created_at, row.has_later_posts);
     let can_delete = is_owner && !row.is_deleted;
+    let can_admin_delete = is_admin && !row.is_deleted;
 
     ThreadPostItem::new(
         row.username,
@@ -1045,10 +1050,13 @@ fn thread_post_item(
         row.edited_at,
         row.body_html,
         row.is_deleted,
+        is_admin,
         can_edit,
         can_delete,
+        can_admin_delete,
         format!("/posts/{}/edit?page={return_page}", row.id),
         format!("/posts/{}/delete", row.id),
+        format!("/admin/posts/{}/delete", row.id),
         return_page,
     )
 }
@@ -1075,7 +1083,7 @@ async fn render_edit_post_page(
     status: StatusCode,
 ) -> Response {
     let repository = ThreadRepository::new(state.db_pool.clone());
-    let post = match repository.find_post_for_edit(post_id).await {
+    let post = match repository.find_post_context(post_id).await {
         Ok(Some(post)) => post,
         Ok(None) => return StatusCode::NOT_FOUND.into_response(),
         Err(db_error) => {
