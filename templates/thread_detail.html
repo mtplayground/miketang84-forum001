@@ -72,10 +72,23 @@
                 </button>
               </form>
             {% endif %}
+            {% if opening_post.can_admin_delete && !opening_post.can_delete %}
+              <form method="post" action="{{ opening_post.admin_delete_path }}">
+                <input type="hidden" name="return_to" value="{{ canonical_path }}?page={{ pagination.current_page }}">
+                <button class="text-xs font-semibold uppercase tracking-[0.18em] text-rose-700 underline decoration-rose-300 underline-offset-4" type="submit">
+                  Admin Delete
+                </button>
+              </form>
+            {% endif %}
           </div>
         </div>
         {% if opening_post.is_deleted %}
           <p class="mt-6 text-sm italic text-stone-500">{{ opening_post.deleted_notice }}</p>
+          {% if opening_post.show_deleted_content %}
+            <div class="prose prose-stone mt-4 max-w-none rounded-2xl border border-amber-200 bg-amber-50/70 px-4 py-4">
+              {{ opening_post.body_html|safe }}
+            </div>
+          {% endif %}
         {% else %}
           <div class="prose prose-stone mt-6 max-w-none">
             {{ opening_post.body_html|safe }}
@@ -121,10 +134,23 @@
                         </button>
                       </form>
                     {% endif %}
+                    {% if reply.can_admin_delete && !reply.can_delete %}
+                      <form method="post" action="{{ reply.admin_delete_path }}">
+                        <input type="hidden" name="return_to" value="{{ canonical_path }}?page={{ pagination.current_page }}">
+                        <button class="text-xs font-semibold uppercase tracking-[0.18em] text-rose-700 underline decoration-rose-300 underline-offset-4" type="submit">
+                          Admin Delete
+                        </button>
+                      </form>
+                    {% endif %}
                   </div>
                 </div>
                 {% if reply.is_deleted %}
                   <p class="mt-6 text-sm italic text-stone-500">{{ reply.deleted_notice }}</p>
+                  {% if reply.show_deleted_content %}
+                    <div class="prose prose-stone mt-4 max-w-none rounded-2xl border border-amber-200 bg-amber-50/70 px-4 py-4">
+                      {{ reply.body_html|safe }}
+                    </div>
+                  {% endif %}
                 {% else %}
                   <div class="prose prose-stone mt-6 max-w-none">
                     {{ reply.body_html|safe }}

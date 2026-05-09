@@ -391,11 +391,14 @@ pub struct ThreadPostItem {
     pub edited_at: Option<String>,
     pub body_html: String,
     pub is_deleted: bool,
+    pub show_deleted_content: bool,
     pub deleted_notice: &'static str,
     pub can_edit: bool,
     pub can_delete: bool,
+    pub can_admin_delete: bool,
     pub edit_path: String,
     pub delete_path: String,
+    pub admin_delete_path: String,
     pub return_page: i64,
 }
 
@@ -406,10 +409,13 @@ impl ThreadPostItem {
         edited_at: Option<chrono::DateTime<chrono::Utc>>,
         body_html: String,
         is_deleted: bool,
+        show_deleted_content: bool,
         can_edit: bool,
         can_delete: bool,
+        can_admin_delete: bool,
         edit_path: String,
         delete_path: String,
+        admin_delete_path: String,
         return_page: i64,
     ) -> Self {
         Self {
@@ -420,11 +426,14 @@ impl ThreadPostItem {
             }),
             body_html,
             is_deleted,
+            show_deleted_content,
             deleted_notice: "This post has been deleted by its author.",
             can_edit,
             can_delete,
+            can_admin_delete,
             edit_path,
             delete_path,
+            admin_delete_path,
             return_page,
         }
     }
