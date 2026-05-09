@@ -17,6 +17,7 @@ use crate::{
         AdminCategoryEditTemplate, AdminCategoryFormErrors, AdminCategoryFormValues,
         AdminCategoryListItem, AdminCategoryListTemplate,
     },
+    threads::ThreadRepository,
 };
 
 const CATEGORY_NAME_MIN_LENGTH: usize = 2;
@@ -35,6 +36,11 @@ pub struct CategoryPositionForm {
     pub position: String,
 }
 
+#[derive(Default, serde::Deserialize)]
+pub struct ThreadReturnForm {
+    pub return_to: Option<String>,
+}
+
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/", get(admin_home))
@@ -45,6 +51,8 @@ pub fn router() -> Router<AppState> {
         )
         .route("/categories/{category_id}/position", post(reorder_category))
         .route("/categories/{category_id}/delete", post(delete_category))
+        .route("/threads/{thread_id}/pin", post(toggle_thread_pin))
+        .route("/threads/{thread_id}/lock", post(toggle_thread_lock))
         .fallback(admin_not_found)
 }
 
@@ -450,6 +458,22 @@ pub async fn delete_category(
     Redirect::to("/admin/categories").into_response()
 }
 
+pub async fn toggle_thread_pin(
+    State(state): State<AppState>,
+    Path(thread_id): Path<i64>,
+    Form(form): Form<ThreadReturnForm>,
+) -> Response {
+    toggle_thread_flag(&state.db_pool, thread_id, "is_pinned", form.return_to).await
+}
+
+pub async fn toggle_thread_lock(
+    State(state): State<AppState>,
+    Path(thread_id): Path<i64>,
+    Form(form): Form<ThreadReturnForm>,
+) -> Response {
+    toggle_thread_flag(&state.db_pool, thread_id, "is_locked", form.return_to).await
+}
+
 async fn load_admin_category_rows(db_pool: &PgPool) -> Result<Vec<Category>, sqlx::Error> {
     CategoryRepository::new(db_pool.clone()).list_all().await
 }
@@ -586,6 +610,37 @@ async fn apply_category_order(
     }
 
     Ok(())
+}
+
+async fn toggle_thread_flag(
+    db_pool: &PgPool,
+    thread_id: i64,
+    column: &'static str,
+    return_to: Option<String>,
+) -> Response {
+    let repository = ThreadRepository::new(db_pool.clone());
+    let thread = match repository.find_by_id(thread_id).await {
+        Ok(Some(thread)) if !thread.is_deleted => thread,
+        Ok(Some(_)) | Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+        Err(db_error) => {
+            error!(error = %db_error, thread_id, column, "failed to load thread for admin toggle");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    let sql = match column {
+        "is_pinned" => "UPDATE threads SET is_pinned = NOT is_pinned WHERE id = $1",
+        "is_locked" => "UPDATE threads SET is_locked = NOT is_locked WHERE id = $1",
+        _ => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    };
+
+    if let Err(db_error) = query(sql).bind(thread_id).execute(db_pool).await {
+        error!(error = %db_error, thread_id, column, "failed to toggle thread flag");
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    }
+
+    let destination = return_to.unwrap_or_else(|| format!("/t/{}-{}", thread.id, thread.slug));
+    Redirect::to(&destination).into_response()
 }
 
 fn render_html<T>(template: T, status: StatusCode, render_error_message: &'static str) -> Response
