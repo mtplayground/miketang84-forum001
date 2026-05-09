@@ -81,6 +81,7 @@ struct ThreadDetailRow {
     title: String,
     category_slug: String,
     category_name: String,
+    is_pinned: bool,
     is_locked: bool,
 }
 
@@ -265,6 +266,7 @@ impl ThreadRepository {
                 t.title,
                 c.slug AS category_slug,
                 c.name AS category_name,
+                t.is_pinned,
                 t.is_locked
             FROM threads t
             JOIN categories c ON c.id = t.category_id
@@ -563,7 +565,8 @@ pub async fn show_thread(
 ) -> Response {
     render_thread_detail_page(
         &state,
-        current_user.0.map(|user| user.id),
+        current_user.0.as_ref().map(|user| user.id),
+        current_user.is_admin(),
         &thread_ref,
         pagination_query.requested_page(),
         ReplyFormValues::default(),
@@ -612,6 +615,7 @@ pub async fn post_reply_to_thread(
         return render_thread_detail_page(
             &state,
             Some(current_user.id),
+            current_user.role == crate::models::UserRole::Admin,
             &thread_ref,
             1,
             form_values,
@@ -781,6 +785,7 @@ pub async fn post_delete_post(
 async fn render_thread_detail_page(
     state: &AppState,
     current_user_id: Option<i64>,
+    is_admin: bool,
     thread_ref: &str,
     requested_page: i64,
     reply_form: ReplyFormValues,
@@ -843,6 +848,7 @@ async fn render_thread_detail_page(
         thread.category_slug,
         thread.category_name,
         thread.title,
+        thread.is_pinned,
         thread_post_item(opening_post, current_user_id, pagination.current_page),
         replies
             .into_iter()
@@ -851,6 +857,7 @@ async fn render_thread_detail_page(
         reply_count,
         pagination,
         current_user_id.is_some(),
+        is_admin,
         thread.is_locked,
         reply_form,
         reply_errors,

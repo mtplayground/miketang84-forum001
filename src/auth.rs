@@ -27,6 +27,13 @@ impl MaybeCurrentUser {
     pub fn is_authenticated(&self) -> bool {
         self.0.is_some()
     }
+
+    pub fn is_admin(&self) -> bool {
+        self.0
+            .as_ref()
+            .map(|user| user.role == UserRole::Admin)
+            .unwrap_or(false)
+    }
 }
 
 impl<S> FromRequestParts<S> for MaybeCurrentUser
